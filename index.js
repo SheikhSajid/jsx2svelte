@@ -119,7 +119,6 @@ const plugins = {
 
                 // Probable parent types:
                 // i. VariableDeclarator
-                // ii. ExpressionStatement
                 const vDeclarator = idPath.findParent(t.isVariableDeclarator);
                 if (vDeclarator && vDeclarator.node.init) {
                   const asnExp = t.assignmentExpression(
@@ -129,6 +128,21 @@ const plugins = {
                   );
                   const exprStmnt = t.expressionStatement(asnExp);
                   const reactiveLabel = t.labeledStatement($, exprStmnt);
+                  toBeCompiledBlock.push(reactiveLabel);
+                  codeSegment.isJSX = true;
+                  return;
+                }
+
+                // ii. ExpressionStatement
+                const exprStmnt = idPath.findParent(t.isExpressionStatement)
+                  .node;
+
+                if (exprStmnt) {
+                  const reactiveLabel = t.labeledStatement($, exprStmnt);
+                  console.log(
+                    'expression code: ',
+                    generate(reactiveLabel, {}).code
+                  );
                   toBeCompiledBlock.push(reactiveLabel);
                   codeSegment.isJSX = true;
                   return;
