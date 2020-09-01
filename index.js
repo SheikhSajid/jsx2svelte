@@ -16,10 +16,10 @@ const toBeCompiledBlock = [];
 let JSXCode = {};
 
 const plugins = {
-  FunctionDeclaration(path) {
-    const funcName = path.node.id.name;
+  FunctionDeclaration(exportedComponentPath) {
+    const funcName = exportedComponentPath.node.id.name;
 
-    const programPath = path.findParent(t.isProgram);
+    const programPath = exportedComponentPath.findParent(t.isProgram);
     const exportNode = programPath.node.body.find(
       (code) => code.type === 'ExportDefaultDeclaration'
     );
@@ -29,7 +29,7 @@ const plugins = {
     }
 
     // Remove ReturnStatement from BlockStatement
-    const funcCodeBlock = path.node.body.body;
+    const funcCodeBlock = exportedComponentPath.node.body.body;
     const blockLen = funcCodeBlock.length;
     const lastElement = funcCodeBlock[blockLen - 1];
 
@@ -48,7 +48,7 @@ const plugins = {
     */
 
     // process props
-    const params = path.node.params;
+    const params = exportedComponentPath.node.params;
     const hasProps = !!params.length;
     console.log('hasProps: ', hasProps);
 
@@ -74,35 +74,68 @@ const plugins = {
       // case 3: nested stuff, prop used inside a callback
       // case 4: what to do if reassigned?
 
-      // detect if any of the props are destructured
       props.forEach((propName) => {
-        // loop thru func body to see if destructuring happens
-        funcCodeBlock.forEach((codeSegment) => {
-          if (
-            codeSegment.type === 'VariableDeclaration' &&
-            codeSegment.declarations[0].id.type === 'ObjectPattern' &&
-            propName === codeSegment.declarations[0].init.name
-          ) {
-            // this props was destructured!
-            console.log(`prop ${propName} destructured!`);
+        // reactive label identifier
+        const $ = t.identifier('$'); // label
 
-            // Add LabeledStatement
-            // identifier
-            const $ = t.identifier('$'); // label
+        // detect if any of the prop is destructured
+        // funcCodeBlock.forEach((codeSegment) => {
+        //   if (
+        //     codeSegment.type === 'VariableDeclaration' &&
+        //     codeSegment.declarations[0].id.type === 'ObjectPattern' &&
+        //     propName === codeSegment.declarations[0].init.name
+        //   ) {
+        //     // this props was destructured!
+        //     console.log(`prop ${propName} destructured!`);
 
-            // expressionStatement <-- assignmentExpression <-- operator, left, right
-            const asnExp = t.assignmentExpression(
-              '=',
-              codeSegment.declarations[0].id, // ObjectPattern
-              codeSegment.declarations[0].init // prop Identifier
-            );
-            const exprStmnt = t.expressionStatement(asnExp);
-            const reactiveLabel = t.labeledStatement($, exprStmnt);
-            toBeCompiledBlock.push(reactiveLabel);
+        //     // Add LabeledStatement
 
-            // Don't add this segment to `toBeCompiledBlock`
-            codeSegment.isJSX = true;
-          }
+        //     // expressionStatement <-- assignmentExpression <-- operator, left, right
+        //     const asnExp = t.assignmentExpression(
+        //       '=',
+        //       codeSegment.declarations[0].id, // ObjectPattern
+        //       codeSegment.declarations[0].init // prop Identifier
+        //     );
+        //     const exprStmnt = t.expressionStatement(asnExp);
+        //     const reactiveLabel = t.labeledStatement($, exprStmnt);
+        //     toBeCompiledBlock.push(reactiveLabel);
+
+        //     // Don't add this segment to `toBeCompiledBlock`
+        //     codeSegment.isJSX = true;
+        //   }
+        // });
+
+        // detect if the prop is being used to declare other variable(s)
+        funcCodeBlock.forEach((codeSegment, i) => {
+          let propUsed = false;
+          const codeSegmentPath = exportedComponentPath.get(`body.body.${i}`);
+
+          codeSegmentPath.traverse({
+            Identifier(idPath) {
+              const idNode = idPath.node;
+              if (idNode.name === propName) {
+                propUsed = true;
+                console.log('prop used: ' + propName);
+
+                // Probable parent types:
+                // i. VariableDeclarator
+                // ii. ExpressionStatement
+                const vDeclarator = idPath.findParent(t.isVariableDeclarator);
+                if (vDeclarator && vDeclarator.node.init) {
+                  const asnExp = t.assignmentExpression(
+                    '=',
+                    vDeclarator.node.id, // ObjectPattern
+                    vDeclarator.node.init // prop Identifier
+                  );
+                  const exprStmnt = t.expressionStatement(asnExp);
+                  const reactiveLabel = t.labeledStatement($, exprStmnt);
+                  toBeCompiledBlock.push(reactiveLabel);
+                  codeSegment.isJSX = true;
+                  return;
+                }
+              }
+            },
+          });
         });
       });
     }
