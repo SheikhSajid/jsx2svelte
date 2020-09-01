@@ -43,11 +43,11 @@ const plugins = {
       );
     }
 
-    /* 
-      Process Function Body (script tags) 
-    */
+    /*
+     * Process Function Body (script tags)
+     */
 
-    // process props
+    //== process props ==//
     const params = exportedComponentPath.node.params;
     const hasProps = !!params.length;
     console.log('hasProps: ', hasProps);
@@ -55,7 +55,7 @@ const plugins = {
     const propsObject = params[0];
 
     // get prop names
-    // i. destructured props
+    // * i. destructured props
     if (hasProps && propsObject.type === 'ObjectPattern') {
       const props = propsObject.properties.map((objProp) => objProp.value.name);
 
@@ -78,33 +78,6 @@ const plugins = {
         // reactive label identifier
         const $ = t.identifier('$'); // label
 
-        // detect if any of the prop is destructured
-        // funcCodeBlock.forEach((codeSegment) => {
-        //   if (
-        //     codeSegment.type === 'VariableDeclaration' &&
-        //     codeSegment.declarations[0].id.type === 'ObjectPattern' &&
-        //     propName === codeSegment.declarations[0].init.name
-        //   ) {
-        //     // this props was destructured!
-        //     console.log(`prop ${propName} destructured!`);
-
-        //     // Add LabeledStatement
-
-        //     // expressionStatement <-- assignmentExpression <-- operator, left, right
-        //     const asnExp = t.assignmentExpression(
-        //       '=',
-        //       codeSegment.declarations[0].id, // ObjectPattern
-        //       codeSegment.declarations[0].init // prop Identifier
-        //     );
-        //     const exprStmnt = t.expressionStatement(asnExp);
-        //     const reactiveLabel = t.labeledStatement($, exprStmnt);
-        //     toBeCompiledBlock.push(reactiveLabel);
-
-        //     // Don't add this segment to `toBeCompiledBlock`
-        //     codeSegment.isJSX = true;
-        //   }
-        // });
-
         // detect if the prop is being used to declare other variable(s)
         funcCodeBlock.forEach((codeSegment, i) => {
           let propUsed = false;
@@ -116,6 +89,12 @@ const plugins = {
               if (idNode.name === propName) {
                 propUsed = true;
                 console.log('prop used: ' + propName);
+
+                // Not reactive if passed as initial value to useState
+                const callExpr = idPath.findParent(t.isCallExpression);
+                if (callExpr && callExpr.node.callee.name === 'useState') {
+                  return;
+                }
 
                 // Probable parent types:
                 // i. VariableDeclarator
@@ -154,6 +133,79 @@ const plugins = {
       });
     }
 
+    // * ii. argument props
+    // TODO
+
+    //== process state ==//
+    /* 
+     * hooks:
+     *  i. useState
+     *  ii. useReducer
+      ? iii. Custom Hooks
+      ? iv. aliases
+    */
+
+    /*
+     * useState
+     *  i. array destructured
+     *  ii. not destructured
+     */
+    const useState = 'useState';
+    const useStateInstances = [];
+
+    // TODO: Detect alias (if exists) and set useState
+
+    // * useState
+    funcCodeBlock.forEach((codeSegment, i) => {
+      const codeSegmentPath = exportedComponentPath.get(`body.body.${i}`);
+
+      codeSegmentPath.traverse({
+        Identifier(stateIdPath) {
+          if (
+            stateIdPath.node.name !== useState ||
+            stateIdPath.container.type !== 'CallExpression'
+          ) {
+            return;
+          }
+          const callExprPath = stateIdPath.parentPath;
+          const lVal = callExprPath.container.id;
+
+          if (lVal.type === 'ArrayPattern') {
+            // array destructured form
+            const stateVariableName = lVal.elements[0].name;
+            const setterFunctionName = lVal.elements[1].name;
+
+            const argNode = callExprPath.node.arguments[0];
+            const { value, name } = argNode;
+            const initialValue = value || name;
+
+            useStateInstances.push([
+              stateVariableName,
+              setterFunctionName,
+              initialValue,
+            ]);
+
+            const vDectr = t.variableDeclarator(
+              t.identifier(stateVariableName),
+              argNode
+            );
+            const vDeclaration = t.variableDeclaration('let', [vDectr]);
+            toBeCompiledBlock.push(vDeclaration);
+          } else if (lVal.type === 'Identifier') {
+            // TODO: not destructured
+            const idName = lVal.name;
+            useStateInstances.push([idName + '[0]', idName + '[1]']);
+          }
+
+          // TODO: find and convert all reactive uses of state
+
+          console.log('useState use found');
+          codeSegment.isJSX = true;
+        },
+      });
+    });
+
+    // include rest of the code in the function body
     funcCodeBlock.forEach((codeBlock) => {
       if (codeBlock.type === 'ReturnStatement') return;
       else if (codeBlock.isJSX) return;
@@ -161,9 +213,9 @@ const plugins = {
       toBeCompiledBlock.push(codeBlock);
     });
 
-    /* 
-      HTMLx
-    */
+    /*
+     * HTMLx
+     */
     JSXCode = lastElement.argument;
   },
 };
