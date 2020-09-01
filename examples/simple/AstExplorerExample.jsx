@@ -3,10 +3,13 @@ function dhorishNa() {
   return 'No bueno!';
 }
 
-function MyComp({ comment, kola }) {
+function MyComp({ comment, kola: fruit }) {
   const { author, text, time: timestamp } = comment;
 
+  const khabo = `Ammu ${fruit} khabo!`;
+
   const [clickCounter, setclickCounter] = useState(0);
+  const countPlus1 = clickCounter + 1;
 
   return (
     <div className="comment">
