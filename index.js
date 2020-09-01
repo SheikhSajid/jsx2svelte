@@ -12,7 +12,7 @@ const code = fs.readFileSync('./examples/simple/AstExplorerExample.jsx', {
 });
 
 const ast = parser.parse(code, { sourceType: 'module', plugins: ['jsx'] });
-const componentFuncBody = [];
+const toBeCompiledBlock = [];
 let JSXCode = {};
 
 const plugins = {
@@ -29,8 +29,9 @@ const plugins = {
     }
 
     // Remove ReturnStatement from BlockStatement
-    const bodyLen = path.node.body.body.length;
-    const lastElement = path.node.body.body[bodyLen - 1];
+    const funcCodeBlock = path.node.body.body;
+    const blockLen = funcCodeBlock.length;
+    const lastElement = funcCodeBlock[blockLen - 1];
 
     if (lastElement.type !== 'ReturnStatement') {
       throw SyntaxError(
@@ -64,16 +65,40 @@ const plugins = {
         const vDeclarator = t.variableDeclarator(identifier);
         const vDeclaration = t.variableDeclaration('let', [vDeclarator]);
         const namedExport = t.exportNamedDeclaration(vDeclaration, [], null);
-        componentFuncBody.push(namedExport);
+        toBeCompiledBlock.push(namedExport);
       });
 
       // TODO: detect and replace prop uses
+      // case 1: destructured if it is an object
+      // case 2: used to define other variables
+      // case 3: nested stuff, prop used inside a callback
+      // case 4: what to do if reassigned?
+
+      // detect if any of the props are destructured
+      props.forEach((propName) => {
+        // loop thru func body to see if destructuring happens
+        funcCodeBlock.forEach((codeSegment) => {
+          if (
+            codeSegment.type === 'VariableDeclaration' &&
+            codeSegment.declarations[0].id.type === 'ObjectPattern' &&
+            propName === codeSegment.declarations[0].init.name
+          ) {
+            // this props was destructured!
+            console.log(`prop ${propName} destructured!`);
+
+            // Add LabeledStatement
+
+            // Don't add this segment to `toBeCompiledBlock`
+            // remove it from funcCodeBlock maybe
+          }
+        });
+      });
     }
 
-    path.node.body.body.forEach((codeBlock) => {
+    funcCodeBlock.forEach((codeBlock) => {
       if (codeBlock.type === 'ReturnStatement') return;
 
-      componentFuncBody.push(codeBlock);
+      toBeCompiledBlock.push(codeBlock);
     });
 
     /* 
@@ -87,7 +112,7 @@ traverse(ast, plugins);
 
 let out = '<script>\n';
 
-componentFuncBody.forEach((block) => {
+toBeCompiledBlock.forEach((block) => {
   out += '  ' + generate(block, {}).code + '\n\n';
 });
 
@@ -96,4 +121,4 @@ out += '</script>\n\n';
 out += generate(JSXCode, {}).code;
 
 // console.log(out);
-fs.writeFileSync(`./out/out${Date.now()}.svelte`, out, { encoding: 'utf8' });
+// fs.writeFileSync(`./out/out${Date.now()}.svelte`, out, { encoding: 'utf8' });
