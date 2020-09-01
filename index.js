@@ -87,9 +87,21 @@ const plugins = {
             console.log(`prop ${propName} destructured!`);
 
             // Add LabeledStatement
+            // identifier
+            const $ = t.identifier('$'); // label
+
+            // expressionStatement <-- assignmentExpression <-- operator, left, right
+            const asnExp = t.assignmentExpression(
+              '=',
+              codeSegment.declarations[0].id, // ObjectPattern
+              codeSegment.declarations[0].init // prop Identifier
+            );
+            const exprStmnt = t.expressionStatement(asnExp);
+            const reactiveLabel = t.labeledStatement($, exprStmnt);
+            toBeCompiledBlock.push(reactiveLabel);
 
             // Don't add this segment to `toBeCompiledBlock`
-            // remove it from funcCodeBlock maybe
+            codeSegment.isJSX = true;
           }
         });
       });
@@ -97,6 +109,7 @@ const plugins = {
 
     funcCodeBlock.forEach((codeBlock) => {
       if (codeBlock.type === 'ReturnStatement') return;
+      else if (codeBlock.isJSX) return;
 
       toBeCompiledBlock.push(codeBlock);
     });
@@ -121,4 +134,4 @@ out += '</script>\n\n';
 out += generate(JSXCode, {}).code;
 
 // console.log(out);
-// fs.writeFileSync(`./out/out${Date.now()}.svelte`, out, { encoding: 'utf8' });
+fs.writeFileSync(`./out/out${Date.now()}.svelte`, out, { encoding: 'utf8' });
