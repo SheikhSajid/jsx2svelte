@@ -3,7 +3,7 @@ function dhorishNa() {
   return 'No bueno!';
 }
 
-function MyComp({ comment }) {
+function MyComp({ comment, kola }) {
   const { author, text, time: timestamp } = comment;
 
   const [clickCounter, setclickCounter] = useState(0);

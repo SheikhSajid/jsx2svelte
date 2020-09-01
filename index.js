@@ -42,12 +42,43 @@ const plugins = {
       );
     }
 
+    /* 
+      Process Function Body (script tags) 
+    */
+
+    // process props
+    const params = path.node.params;
+    const hasProps = !!params.length;
+    console.log('hasProps: ', hasProps);
+
+    const propsObject = params[0];
+
+    // get prop names
+    // i. destructured props
+    if (hasProps && propsObject.type === 'ObjectPattern') {
+      const props = propsObject.properties.map((objProp) => objProp.value.name);
+
+      // add `export let <propName>` statements
+      props.forEach((propName) => {
+        const identifier = t.identifier(propName);
+        const vDeclarator = t.variableDeclarator(identifier);
+        const vDeclaration = t.variableDeclaration('let', [vDeclarator]);
+        const namedExport = t.exportNamedDeclaration(vDeclaration, [], null);
+        componentFuncBody.push(namedExport);
+      });
+
+      // TODO: detect and replace prop uses
+    }
+
     path.node.body.body.forEach((codeBlock) => {
       if (codeBlock.type === 'ReturnStatement') return;
 
       componentFuncBody.push(codeBlock);
     });
 
+    /* 
+      HTMLx
+    */
     JSXCode = lastElement.argument;
   },
 };
@@ -64,5 +95,5 @@ out += '</script>\n\n';
 
 out += generate(JSXCode, {}).code;
 
-console.log(out);
+// console.log(out);
 fs.writeFileSync(`./out/out${Date.now()}.svelte`, out, { encoding: 'utf8' });
