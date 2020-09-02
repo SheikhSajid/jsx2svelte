@@ -54,6 +54,42 @@ const plugins = {
 
     const propsObject = params[0];
 
+    function compileIdToReactive(idPath) {
+      propUsed = true;
+      const $ = t.identifier('$'); // label
+      // Not reactive if passed as initial value to useState
+      const callExpr = idPath.findParent(t.isCallExpression);
+      if (callExpr && callExpr.node.callee.name === 'useState') {
+        return;
+      }
+
+      // Probable parent types:
+      // i. VariableDeclarator
+      const vDeclarator = idPath.findParent(t.isVariableDeclarator);
+      if (vDeclarator && vDeclarator.node.init) {
+        const asnExp = t.assignmentExpression(
+          '=',
+          vDeclarator.node.id,
+          vDeclarator.node.init
+        );
+        const exprStmnt = t.expressionStatement(asnExp);
+        const reactiveLabel = t.labeledStatement($, exprStmnt);
+        // toBeCompiledBlock.push(reactiveLabel);
+        // codeSegment.isJSX = true;
+        return reactiveLabel;
+      }
+
+      // ii. ExpressionStatement
+      const exprStmntPath = idPath.findParent(t.isExpressionStatement);
+
+      if (exprStmntPath) {
+        const reactiveLabel = t.labeledStatement($, exprStmntPath.node);
+        // toBeCompiledBlock.push(reactiveLabel);
+        // codeSegment.isJSX = true;
+        return reactiveLabel;
+      }
+    }
+
     // get prop names
     // * i. destructured props
     if (hasProps && propsObject.type === 'ObjectPattern') {
@@ -76,8 +112,6 @@ const plugins = {
 
       props.forEach((propName) => {
         // reactive label identifier
-        const $ = t.identifier('$'); // label
-
         // detect if the prop is being used to declare other variable(s)
         funcCodeBlock.forEach((codeSegment, i) => {
           let propUsed = false;
@@ -85,47 +119,9 @@ const plugins = {
 
           codeSegmentPath.traverse({
             Identifier(idPath) {
-              const idNode = idPath.node;
-              if (idNode.name === propName) {
-                propUsed = true;
-                console.log('prop used: ' + propName);
-
-                // Not reactive if passed as initial value to useState
-                const callExpr = idPath.findParent(t.isCallExpression);
-                if (callExpr && callExpr.node.callee.name === 'useState') {
-                  return;
-                }
-
-                // Probable parent types:
-                // i. VariableDeclarator
-                const vDeclarator = idPath.findParent(t.isVariableDeclarator);
-                if (vDeclarator && vDeclarator.node.init) {
-                  const asnExp = t.assignmentExpression(
-                    '=',
-                    vDeclarator.node.id, // ObjectPattern
-                    vDeclarator.node.init // prop Identifier
-                  );
-                  const exprStmnt = t.expressionStatement(asnExp);
-                  const reactiveLabel = t.labeledStatement($, exprStmnt);
-                  toBeCompiledBlock.push(reactiveLabel);
-                  codeSegment.isJSX = true;
-                  return;
-                }
-
-                // ii. ExpressionStatement
-                const exprStmnt = idPath.findParent(t.isExpressionStatement)
-                  .node;
-
-                if (exprStmnt) {
-                  const reactiveLabel = t.labeledStatement($, exprStmnt);
-                  console.log(
-                    'expression code: ',
-                    generate(reactiveLabel, {}).code
-                  );
-                  toBeCompiledBlock.push(reactiveLabel);
-                  codeSegment.isJSX = true;
-                  return;
-                }
+              if (idPath.node.name === propName) {
+                toBeCompiledBlock.push(compileIdToReactive(idPath));
+                codeSegment.isJSX = true;
               }
             },
           });
@@ -151,7 +147,9 @@ const plugins = {
      *  ii. not destructured
      */
     const useState = 'useState';
-    const useStateInstances = [];
+    const stateVariableNames = [];
+    const setterFunctionNames = [];
+    const initialValues = [];
 
     // TODO: Detect alias (if exists) and set useState
 
@@ -161,12 +159,17 @@ const plugins = {
 
       codeSegmentPath.traverse({
         Identifier(stateIdPath) {
-          if (
+          if (stateVariableNames.includes(stateIdPath.node.name)) {
+            toBeCompiledBlock.push(compileIdToReactive(stateIdPath));
+            codeSegment.isJSX = true;
+            return;
+          } else if (
             stateIdPath.node.name !== useState ||
             stateIdPath.container.type !== 'CallExpression'
           ) {
             return;
           }
+
           const callExprPath = stateIdPath.parentPath;
           const lVal = callExprPath.container.id;
 
@@ -176,14 +179,17 @@ const plugins = {
             const setterFunctionName = lVal.elements[1].name;
 
             const argNode = callExprPath.node.arguments[0];
-            const { value, name } = argNode;
-            const initialValue = value || name;
+            // const { value, name } = argNode;
+            // const initialValue = value || name;
 
-            useStateInstances.push([
-              stateVariableName,
-              setterFunctionName,
-              initialValue,
-            ]);
+            stateVariableNames.push(stateVariableName);
+            setterFunctionNames.push(setterFunctionName);
+
+            // useStateInstances.push([
+            //   stateVariableName,
+            //   setterFunctionName,
+            //   initialValue,
+            // ]);
 
             const vDectr = t.variableDeclarator(
               t.identifier(stateVariableName),
@@ -194,7 +200,8 @@ const plugins = {
           } else if (lVal.type === 'Identifier') {
             // TODO: not destructured
             const idName = lVal.name;
-            useStateInstances.push([idName + '[0]', idName + '[1]']);
+            stateVariableNames.push(idName + '[0]');
+            setterFunctionNames.push(idName + '[1]');
           }
 
           // TODO: find and convert all reactive uses of state
