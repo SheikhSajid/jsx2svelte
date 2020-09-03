@@ -151,7 +151,46 @@ function processProps(idPath, funcPath) {
         parentToBeReplaced.remove();
       }
     }
+
+    return true;
   }
+
+  return false;
+}
+
+let useState = 'useState';
+const stateVariables = {};
+const setterFunctions = {};
+function processUseState(idPath, funcPath) {
+  if (
+    idPath.node.name === useState &&
+    idPath.container.type === 'CallExpression'
+  ) {
+    const callExprPath = idPath.parentPath;
+    const lVal = callExprPath.container.id;
+
+    if (lVal.type === 'ArrayPattern') {
+      // array destructured form
+      const stateVariableName = lVal.elements[0].name;
+      const setterFunctionName = lVal.elements[1].name;
+
+      const argNode = callExprPath.node.arguments[0];
+
+      stateVariables[stateVariableName] = setterFunctionName;
+      setterFunctions[setterFunctionName] = stateVariableName;
+
+      const vDectr = t.variableDeclarator(
+        t.identifier(stateVariableName),
+        argNode
+      );
+      const vDeclaration = t.variableDeclaration('let', [vDectr]);
+      const bodyNode = getComponentBodyPath(idPath, funcPath);
+      bodyNode.replaceWith(vDeclaration);
+      return true;
+    }
+  }
+
+  return false;
 }
 
 // * main
@@ -179,9 +218,15 @@ const plugins = {
     //== traverse function body ==//
     funcPath.get('body').traverse({
       Identifier(idPath) {
-        // process return statements
-        processProps(idPath, funcPath); // ! Side Effect: modifies AST
+        const propsProcessed = processProps(idPath, funcPath); // ! Side Effect: modifies AST
+        if (propsProcessed) return;
+
         // process useState
+        // ! modifies AST: replace `useState` calls with declarations
+        // ! Replace state access and setterfunc calls with reactive variables
+        // ! changes stateVariables, setterFunctions
+        let useStateReplaced = processUseState(idPath, funcPath);
+        if (useStateReplaced) return;
       },
       // ! Side Effects: changes allJSXReturns, jsxElements
       ReturnStatement(returnPath) {
