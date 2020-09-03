@@ -74,7 +74,7 @@ function getReactiveNodeForIdentifier(identifierPath, componentFuncPath) {
   // TODO: handle conditional rendering
   const isReturn = identifierPath.findParent(t.isReturnStatement);
   if (isReturn) {
-    return { parentToBeReplaced: isReturn, reactiveLabel: null };
+    return { parentToBeReplaced: null, reactiveLabel: null };
   }
 
   let componentBodyPath = getComponentBodyPath(
@@ -156,7 +156,8 @@ function processProps(idPath, funcPath) {
 
 // * main
 const scriptNodes = [];
-const jsxBodies = { mainJSXBody: {}, others: {} };
+const jsxElements = { mainJSXElementPath: {}, others: {} };
+const allJSXReturns = [];
 
 const plugins = {
   FunctionDeclaration(funcPath) {
@@ -182,23 +183,39 @@ const plugins = {
         processProps(idPath, funcPath); // ! Side Effect: modifies AST
         // process useState
       },
+      // ! Side Effects: changes allJSXReturns, jsxElements
       ReturnStatement(returnPath) {
-        console.log('inside return!');
+        const containingFunction = returnPath.getFunctionParent();
+
         if (returnPath.node.argument.type === 'JSXElement') {
-          const containingFunction = returnPath.getFunctionParent();
-          const jsxElement = returnPath.node.argument;
+          allJSXReturns.push(returnPath);
+          const jsxElement = returnPath.get('argument');
           const containingFunctionName = containingFunction.node.id.name;
 
           if (containingFunction === funcPath) {
-            jsxBodies.mainJSXBody = jsxElement;
+            // main return statement of the component
+            jsxElements.mainJSXElementPath = jsxElement;
           } else {
-            others[containingFunctionName] = jsxElement;
+            // function in the body that returns JSX
+            others[containingFunctionName] = {
+              jsxElement,
+              containingFunctionPath: containingFunction,
+            };
           }
+        } else {
+          // ? Identify and remember any variables that store JSX (using Identifier visitor)
+          // TODO: 1. Detect if returned Identifier resolves to JSX
+          // TODO: 2. Replace the function calls with JSX element
         }
-
-        returnPath.remove();
       },
     });
+
+    //== traverse JSX ==//
+    // jsxElements.mainJSXElementPath.traverse({
+    //   // traverse JSX
+    // });
+
+    allJSXReturns.forEach((retPath) => retPath.remove());
 
     //== push the processed function body for code generation ==//
     funcPath.node.body.body.forEach((bodyNode) => scriptNodes.push(bodyNode));
@@ -215,7 +232,7 @@ scriptNodes.forEach((node) => {
 
 out += '</script>\n\n';
 
-out += generate(jsxBodies.mainJSXBody, {}).code;
+out += generate(jsxElements.mainJSXElementPath.node, {}).code;
 
 // console.log(out);
 
