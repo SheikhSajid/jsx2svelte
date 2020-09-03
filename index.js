@@ -147,8 +147,8 @@ const plugins = {
      *  ii. not destructured
      */
     const useState = 'useState';
-    const stateVariableNames = [];
-    const setterFunctionNames = [];
+    const stateVariables = {};
+    const setterFunctions = {};
     const initialValues = [];
 
     // TODO: Detect alias (if exists) and set useState
@@ -159,10 +159,34 @@ const plugins = {
 
       codeSegmentPath.traverse({
         Identifier(stateIdPath) {
-          if (stateVariableNames.includes(stateIdPath.node.name)) {
+          if (codeSegment.isAlreadyCompiled) {
+            return;
+          } else if (stateVariables[stateIdPath.node.name] !== undefined) {
+            // state variable
             toBeCompiledBlock.push(compileIdToReactive(stateIdPath));
+            codeSegment.isAlreadyCompiled = true; // make sure later stages don't recompile this portion
             codeSegment.isJSX = true;
             return;
+          } else if (setterFunctions[stateIdPath.node.name] !== undefined) {
+            // setter function
+            const callExpr = stateIdPath.findParent(t.isCallExpression);
+
+            if (callExpr) {
+              const asnExp = t.assignmentExpression(
+                '=',
+                t.identifier(setterFunctions[stateIdPath.node.name]),
+                callExpr.node.arguments[0]
+              );
+              const exprStmnt = t.expressionStatement(asnExp);
+              callExpr.replaceWith(exprStmnt);
+
+              const isJsx = stateIdPath.findParent(t.isJSXElement);
+              if (!isJsx) {
+                toBeCompiledBlock.push(codeSegment);
+                codeSegment.isAlreadyCompiled = true;
+              }
+              return;
+            }
           } else if (
             stateIdPath.node.name !== useState ||
             stateIdPath.container.type !== 'CallExpression'
@@ -182,8 +206,8 @@ const plugins = {
             // const { value, name } = argNode;
             // const initialValue = value || name;
 
-            stateVariableNames.push(stateVariableName);
-            setterFunctionNames.push(setterFunctionName);
+            stateVariables[stateVariableName] = setterFunctionName;
+            setterFunctions[setterFunctionName] = stateVariableName;
 
             // useStateInstances.push([
             //   stateVariableName,
@@ -200,8 +224,8 @@ const plugins = {
           } else if (lVal.type === 'Identifier') {
             // TODO: not destructured
             const idName = lVal.name;
-            stateVariableNames.push(idName + '[0]');
-            setterFunctionNames.push(idName + '[1]');
+            stateVariables[idName + '[0]'] = idName + '[1]';
+            setterFunctions[idName + '[1]'] = idName + '[0]';
           }
 
           // TODO: find and convert all reactive uses of state
@@ -214,8 +238,12 @@ const plugins = {
 
     // include rest of the code in the function body
     funcCodeBlock.forEach((codeBlock) => {
-      if (codeBlock.type === 'ReturnStatement') return;
-      else if (codeBlock.isJSX) return;
+      if (
+        codeBlock.type === 'ReturnStatement' ||
+        codeBlock.isJSX ||
+        codeBlock.isAlreadyCompiled
+      )
+        return;
 
       toBeCompiledBlock.push(codeBlock);
     });
