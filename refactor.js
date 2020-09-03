@@ -162,6 +162,20 @@ let useState = 'useState';
 const stateVariables = {};
 const setterFunctions = {};
 function processUseState(idPath, funcPath) {
+  if (stateVariables[idPath.node.name] !== undefined) {
+    let vDec = idPath.findParent(t.isVariableDeclaration);
+    if (vDec && stateVariables[idPath.node.name].decNode === vDec.node) {
+      return false;
+    }
+
+    const { parentToBeReplaced, reactiveLabel } = getReactiveNodeForIdentifier(
+      idPath,
+      funcPath
+    );
+    if (parentToBeReplaced) parentToBeReplaced.replaceWith(reactiveLabel);
+    return true;
+  }
+
   if (
     idPath.node.name === useState &&
     idPath.container.type === 'CallExpression'
@@ -176,9 +190,6 @@ function processUseState(idPath, funcPath) {
 
       const argNode = callExprPath.node.arguments[0];
 
-      stateVariables[stateVariableName] = setterFunctionName;
-      setterFunctions[setterFunctionName] = stateVariableName;
-
       const vDectr = t.variableDeclarator(
         t.identifier(stateVariableName),
         argNode
@@ -186,6 +197,12 @@ function processUseState(idPath, funcPath) {
       const vDeclaration = t.variableDeclaration('let', [vDectr]);
       const bodyNode = getComponentBodyPath(idPath, funcPath);
       bodyNode.replaceWith(vDeclaration);
+
+      stateVariables[stateVariableName] = {
+        setterFunctionName,
+        decNode: vDeclaration,
+      };
+      setterFunctions[setterFunctionName] = stateVariableName;
       return true;
     }
   }
