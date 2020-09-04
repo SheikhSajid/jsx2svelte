@@ -64,7 +64,7 @@ function getReactiveNodeForIdentifier(
   }
 
   const alreadyReactive = identifierPath.findParent(t.isLabeledStatement);
-  if (alreadyReactive) {
+  if (alreadyReactive && !isSetter) {
     return { parentToBeReplaced: null, reactiveLabel: null };
   }
 
@@ -159,7 +159,23 @@ function getDeclarationForUseState(idPath) {
   return { vDeclaration, stateVariableName, setterFunctionName };
 }
 
-function getreactiveNodeForSetter(params) {}
+function getAsmntNodeForSetter(idPath, stateVariableName, funcPath) {
+  let out = { callExprPath: null, asnExpr: null };
+  const callExprPath = idPath.findParent(t.isCallExpression);
+
+  if (!callExprPath) {
+    return out;
+  }
+
+  const asnExpr = t.assignmentExpression(
+    '=',
+    t.identifier(stateVariableName),
+    callExprPath.node.arguments[0]
+  );
+  // callExpr.replaceWith(asnExpr);
+
+  return { callExprPath, asnExpr };
+}
 
 // * processing functions
 function processProps(idPath, funcPath) {
@@ -218,6 +234,32 @@ function processState(idPath, funcPath) {
   }
 
   // TODO: setter functions
+  const isSetter = setterFunctions[idPath.node.name] !== undefined;
+  if (isSetter) {
+    const { callExprPath, asnExpr } = getAsmntNodeForSetter(
+      idPath,
+      setterFunctions[idPath.node.name]
+    );
+
+    if (!callExprPath) {
+      return false;
+    }
+
+    callExprPath.replaceWith(asnExpr);
+    const hasLabeledParent = callExprPath.findParent(t.isLabeledStatement);
+    const isInsideFuncDecl = callExprPath.findParent(t.isFunctionDeclaration);
+
+    // ? function declarations
+    // ? return statement
+    if (!hasLabeledParent && !isInsideFuncDecl) {
+      const bodyNodePath = getComponentBodyPath(idPath, funcPath);
+      const labeledStatement = t.labeledStatement(
+        t.identifier('$'),
+        bodyNodePath.node
+      );
+      bodyNodePath.replaceWith(labeledStatement);
+    }
+  }
 
   if (
     idPath.node.name === useState &&
