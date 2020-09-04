@@ -71,7 +71,6 @@ function getReactiveNodeForIdentifier(
   const parentFunctionPath = identifierPath.getFunctionParent();
   const isNestedFunction = parentFunctionPath !== componentFuncPath;
   if (isNestedFunction) {
-    console.log('inside a function! oh no!');
     return { parentToBeReplaced: null, reactiveLabel: null };
   }
 
@@ -245,7 +244,7 @@ function processState(idPath, funcPath) {
       return false;
     }
 
-    callExprPath.replaceWith(asnExpr);
+    callExprPath.replaceWith(asnExpr); // ! replace the function call
     const hasLabeledParent = callExprPath.findParent(t.isLabeledStatement);
     const isInsideFuncDecl = callExprPath.findParent(t.isFunctionDeclaration);
 
@@ -257,6 +256,8 @@ function processState(idPath, funcPath) {
         t.identifier('$'),
         bodyNodePath.node
       );
+
+      // ! if necessary, replace containing statement with a reactive one
       bodyNodePath.replaceWith(labeledStatement);
     }
   }
@@ -349,10 +350,17 @@ const plugins = {
       },
     });
 
-    //== traverse JSX ==//
-    // jsxElements.mainJSXElementPath.traverse({
-    //   // traverse JSX
-    // });
+    //== traverse returned JSX ==//
+    jsxElements.mainJSXElementPath.traverse({
+      JSXIdentifier(jsxPath) {
+        // TODO: inline JSX variables and function calls
+
+        // ! replace `className` with `class`
+        if (jsxPath.node.name === 'className') {
+          jsxPath.node.name = 'class';
+        }
+      },
+    });
 
     allJSXReturns.forEach((retPath) => retPath.remove());
 
