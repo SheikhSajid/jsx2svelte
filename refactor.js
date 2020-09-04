@@ -290,6 +290,16 @@ function processState(idPath, funcPath) {
   return false;
 }
 
+function processJSXVariables(idPath, funcPath) {
+  const jsxElemPath = idPath.findParent(t.isJSXElement);
+  if (!jsxElemPath) {
+    return false;
+  }
+
+  // * 2. Detect if it is a declaration or assignment expression
+  // *
+}
+
 // * main
 const scriptNodes = [];
 const jsxElements = { mainJSXElementPath: {}, others: {} };
@@ -322,6 +332,9 @@ const plugins = {
         // ! Replace state access and setterfunc call with reactive variables
         let useStateReplaced = processState(idPath, funcPath);
         if (useStateReplaced) return;
+
+        let jsxRemoved = processJSXVariables(idPath, funcPath);
+        if (jsxRemoved) return;
       },
       // ! Side Effects: changes allJSXReturns, jsxElements
       ReturnStatement(returnPath) {
@@ -346,6 +359,23 @@ const plugins = {
           // ? Identify and remember any variables that store JSX (using Identifier visitor)
           // TODO: 1. Detect if returned Identifier resolves to JSX
           // TODO: 2. Replace the function calls with JSX element
+        }
+      },
+      JSXElement(jsxElemPath) {
+        // * 1. Inside a if statement or function
+        const isInsideIf = jsxElemPath.findParent(t.isIfStatement);
+        if (isInsideIf) {
+          throw SyntaxError(
+            'HTMLx tags cannot be assigned to variables inside of if blocks'
+          );
+        }
+
+        const funcDecl = jsxElemPath.getFunctionParent();
+        if (funcDecl !== funcPath) {
+          throw SyntaxError(
+            'Svelte does not support functional components. It seems like you have a JSX element inside function: ' +
+              funcDecl.node.id.name
+          );
         }
       },
     });
