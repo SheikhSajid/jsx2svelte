@@ -49,7 +49,11 @@ function getComponentBodyPath(path, componentFuncPath) {
   return bodyNodePath;
 }
 
-function getReactiveNodeForIdentifier(identifierPath, componentFuncPath) {
+function getReactiveNodeForIdentifier(
+  identifierPath,
+  componentFuncPath,
+  isSetter
+) {
   // propUsed = true;
   const $ = t.identifier('$'); // label
 
@@ -130,6 +134,33 @@ function getPropNames(funcPath) {
   return props;
 }
 
+function getDeclarationForUseState(idPath) {
+  const callExprPath = idPath.parentPath;
+  const lVal = callExprPath.container.id;
+  let vDeclaration = null;
+  let setterFunctionName = null;
+  let stateVariableName = null;
+
+  if (lVal.type === 'ArrayPattern') {
+    // array destructured form
+    stateVariableName = lVal.elements[0].name;
+    setterFunctionName = lVal.elements[1].name;
+
+    const argNode = callExprPath.node.arguments[0];
+
+    const vDectr = t.variableDeclarator(
+      t.identifier(stateVariableName),
+      argNode
+    );
+
+    vDeclaration = t.variableDeclaration('let', [vDectr]);
+  }
+
+  return { vDeclaration, stateVariableName, setterFunctionName };
+}
+
+function getreactiveNodeForSetter(params) {}
+
 // * processing functions
 function processProps(idPath, funcPath) {
   const propsNames = getPropNames(funcPath);
@@ -142,7 +173,8 @@ function processProps(idPath, funcPath) {
     console.log('prop used: ' + identifierName);
     const { parentToBeReplaced, reactiveLabel } = getReactiveNodeForIdentifier(
       idPath,
-      funcPath
+      funcPath,
+      false
     );
 
     if (parentToBeReplaced) {
@@ -159,42 +191,45 @@ function processProps(idPath, funcPath) {
 }
 
 let useState = 'useState';
-const stateVariables = {};
+const stateVariables = {
+  /* setterFunctionName, decNode */
+};
 const setterFunctions = {};
-function processUseState(idPath, funcPath) {
-  if (stateVariables[idPath.node.name] !== undefined) {
-    let vDec = idPath.findParent(t.isVariableDeclaration);
-    if (vDec && stateVariables[idPath.node.name].decNode === vDec.node) {
+function processState(idPath, funcPath) {
+  // TODO: detect aliases
+  const isStateVariable = stateVariables[idPath.node.name] !== undefined;
+  if (isStateVariable) {
+    let parentDec = idPath.findParent(t.isVariableDeclaration);
+    let isStateDeclaration =
+      parentDec && stateVariables[idPath.node.name].decNode === parentDec.node;
+    if (isStateDeclaration) {
+      // Don't replace state declaration. After useState is replaced with VariableDeclaration,
+      // it is immediately revisited, we do not want to replace it
       return false;
     }
 
     const { parentToBeReplaced, reactiveLabel } = getReactiveNodeForIdentifier(
       idPath,
-      funcPath
+      funcPath,
+      false
     );
     if (parentToBeReplaced) parentToBeReplaced.replaceWith(reactiveLabel);
     return true;
   }
 
+  // TODO: setter functions
+
   if (
     idPath.node.name === useState &&
     idPath.container.type === 'CallExpression'
   ) {
-    const callExprPath = idPath.parentPath;
-    const lVal = callExprPath.container.id;
+    const {
+      vDeclaration,
+      stateVariableName,
+      setterFunctionName,
+    } = getDeclarationForUseState(idPath);
 
-    if (lVal.type === 'ArrayPattern') {
-      // array destructured form
-      const stateVariableName = lVal.elements[0].name;
-      const setterFunctionName = lVal.elements[1].name;
-
-      const argNode = callExprPath.node.arguments[0];
-
-      const vDectr = t.variableDeclarator(
-        t.identifier(stateVariableName),
-        argNode
-      );
-      const vDeclaration = t.variableDeclaration('let', [vDectr]);
+    if (vDeclaration) {
       const bodyNode = getComponentBodyPath(idPath, funcPath);
       bodyNode.replaceWith(vDeclaration);
 
@@ -205,6 +240,8 @@ function processUseState(idPath, funcPath) {
       setterFunctions[setterFunctionName] = stateVariableName;
       return true;
     }
+
+    // TODO: non-destructured pattern
   }
 
   return false;
@@ -238,11 +275,9 @@ const plugins = {
         const propsProcessed = processProps(idPath, funcPath); // ! Side Effect: modifies AST
         if (propsProcessed) return;
 
-        // process useState
-        // ! modifies AST: replace `useState` calls with declarations
-        // ! Replace state access and setterfunc calls with reactive variables
-        // ! changes stateVariables, setterFunctions
-        let useStateReplaced = processUseState(idPath, funcPath);
+        // ! modifies AST: replace `useState` call with declarations
+        // ! Replace state access and setterfunc call with reactive variables
+        let useStateReplaced = processState(idPath, funcPath);
         if (useStateReplaced) return;
       },
       // ! Side Effects: changes allJSXReturns, jsxElements
