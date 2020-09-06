@@ -310,6 +310,7 @@ function processState(idPath, funcPath) {
   return false;
 }
 
+const jsxVarables = {};
 function processJSXVariables(idPath, funcPath) {
   const jsxElemPath = idPath.findParent(t.isJSXElement);
   if (!jsxElemPath) {
@@ -321,12 +322,12 @@ function processJSXVariables(idPath, funcPath) {
 }
 
 // * main
-const scriptNodes = [];
+let scriptNodes = [];
 const jsxElements = { mainJSXElementPath: {}, others: {} };
 const allJSXReturns = [];
 
 const defaultExport = {};
-const jsxVarables = {};
+
 const exportDetectionPlugin = {
   // JSXElement(jsxPath) {
   //   // !throw if inside loop
@@ -531,15 +532,79 @@ if (!defaultExport.function) {
   throw Error('Input file has to export a function that returns JSX');
 }
 
+const propsNames = getPropNames(defaultExport.function);
+
+// * add export statement for each prop
+propsNames.forEach((propName) => {
+  scriptNodes.push(getExportNodeForProp(propName));
+});
+
+const funcPath = defaultExport.function;
+funcPath.get('body').traverse({
+  Identifier(idPath) {
+    const propsProcessed = processProps(idPath, funcPath); // ! Side Effect: modifies AST
+    if (propsProcessed) return;
+
+    // ! modifies AST: replace `useState` call with declarations
+    // ! Replace state access and setterfunc call with reactive variables
+    let useStateReplaced = processState(idPath, funcPath);
+    if (useStateReplaced) return;
+
+    let jsxRemoved = processJSXVariables(idPath, funcPath);
+    if (jsxRemoved) return;
+  },
+  JSXElement(jsxPath) {
+    // !throw if inside loop
+    const isInLoop = jsxPath.findParent((path) => {
+      return (
+        t.isForXStatement(path) || t.isForStatement(path) || t.isWhile(path)
+      );
+    });
+
+    if (isInLoop) {
+      throw Error('JSX inside loops cannot be compiled');
+    }
+
+    // ! throw if inside conditional
+    const isInConditional = jsxPath.findParent(t.isConditional);
+    if (isInConditional) {
+      throw Error('JSX inside conditionals cannot be compiled');
+    }
+
+    // ! throw if inside a function
+    const funcDecl = jsxPath.getFunctionParent();
+    if (funcDecl !== funcPath) {
+      throw SyntaxError(
+        'It seems like you have a JSX element inside function: ' +
+          funcDecl.node.id.name +
+          '. This is not supported.'
+      );
+    }
+
+    // * store variable names
+    const declaratorPath = jsxPath.findParent(t.isVariableDeclarator);
+    if (declaratorPath) {
+      const varName = declaratorPath.node.id.name;
+      jsxVarables[varName] = jsxPath;
+    }
+
+    const assignmentPath = jsxPath.findParent(t.isAssignmentExpression);
+    if (assignmentPath) {
+      const varName = assignmentPath.node.left.name;
+      jsxVarables[varName] = jsxPath;
+    }
+  },
+});
+
+scriptNodes = scriptNodes.concat(funcPath.node.body.body);
+
 let out = '<script>\n';
 
-// scriptNodes.forEach((node) => {
-//   out += '  ' + generate(node, {}).code + '\n\n';
-// });
+scriptNodes.forEach((node) => {
+  out += '  ' + generate(node, {}).code + '\n\n';
+});
 
 out += '</script>\n\n';
-
-out += generate(jsxElements.mainJSXElementPath.node, {}).code;
 
 console.log(out);
 
