@@ -198,6 +198,17 @@ function getContainingFunction(path) {
   return { name, path: func };
 }
 
+function getListMapCode({ objName, elementName, jsxElem, keyNode }) {
+  const out = `{#each ${objName} as ${elementName} (${
+    generate(keyNode.node.expression, {}).code
+  })}
+      ${generate(jsxElem, {}).code}
+    {/each}`;
+  keyNode.remove();
+
+  return out;
+}
+
 // * processing functions
 const compiledStateBodyNodePaths = [];
 function processProps(idPath, funcPath) {
@@ -554,6 +565,7 @@ propsNames.forEach((propName) => {
   scriptNodes.push(getExportNodeForProp(propName));
 });
 
+const listMaps = [];
 const funcPath = defaultExport.function;
 funcPath.get('body').traverse({
   // ! modifies the jsxVariables object
@@ -594,13 +606,54 @@ funcPath.get('body').traverse({
     }
 
     // ! throw if inside a function
-    const funcDecl = jsxPath.getFunctionParent();
-    if (funcDecl !== funcPath) {
-      throw SyntaxError(
-        'It seems like you have a JSX element inside function: ' +
-          funcDecl.node.id.name +
-          '. This is not supported.'
+    const funcDecl = jsxPath.findParent(t.isFunction);
+    const callExpr = jsxPath.findParent(t.isCallExpression);
+    if (
+      funcDecl !== funcPath &&
+      (!callExpr ||
+        callExpr.node.callee.type !== 'MemberExpression' ||
+        callExpr.node.callee.property.name !== 'map')
+    ) {
+      throw Error(
+        'It seems like you have a JSX element inside function. This is not supported.'
       );
+    }
+  },
+  CallExpression(callExprPath) {
+    const callNode = callExprPath.node;
+
+    if (
+      callNode.callee.type === 'MemberExpression' &&
+      callNode.callee.property.name === 'map'
+    ) {
+      const callback = callNode.arguments[0];
+      const objName = callNode.callee.object.name;
+      const elementName = callback.params[0].name;
+      let keyNode = {};
+      let jsxElem = {};
+
+      if (callback.body.type === 'JSXElement') {
+        jsxElem = callback.body;
+      } else if (callback.body.body[0].type === 'ReturnStatement') {
+        jsxElem = callback.body.body[0].argument;
+      } else {
+        console.warn(
+          'Callback passed to map must return JSX and cannot have other code in its body'
+        );
+        return;
+      }
+
+      callExprPath.traverse({
+        JSXAttribute(jsxAttrPath) {
+          if (jsxAttrPath.node.name.name !== 'key') {
+            return;
+          }
+
+          keyNode = jsxAttrPath.get('value');
+        },
+      });
+
+      listMaps.push({ objName, elementName, jsxElem, keyNode });
     }
   },
   Identifier(idPath) {
