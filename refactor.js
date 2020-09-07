@@ -310,15 +310,20 @@ function processState(idPath, funcPath) {
   return false;
 }
 
-const jsxVarables = {};
-function processJSXVariables(idPath, funcPath) {
-  const jsxElemPath = idPath.findParent(t.isJSXElement);
-  if (!jsxElemPath) {
+const jsxVariables = {};
+function processJSXVariable(idPath, funcPath) {
+  if (
+    !jsxVariables[idPath.node.name] ||
+    (idPath.container.type !== 'JSXExpressionContainer' &&
+      idPath.container.type !== 'ReturnStatement')
+  ) {
     return false;
   }
 
-  // * 2. Detect if it is a declaration or assignment expression
-  // *
+  const name = idPath.node.name;
+
+  idPath.parentPath.replaceWith(jsxVariables[idPath.node.name].node);
+  getComponentBodyPath(jsxVariables[name], funcPath).remove();
 }
 
 // * main
@@ -550,7 +555,7 @@ funcPath.get('body').traverse({
     let useStateReplaced = processState(idPath, funcPath);
     if (useStateReplaced) return;
 
-    let jsxRemoved = processJSXVariables(idPath, funcPath);
+    let jsxRemoved = processJSXVariable(idPath, funcPath);
     if (jsxRemoved) return;
   },
   JSXElement(jsxPath) {
@@ -580,18 +585,21 @@ funcPath.get('body').traverse({
           '. This is not supported.'
       );
     }
+  },
+  VariableDeclarator(declaratorPath) {
+    const varName = declaratorPath.node.id.name;
+    const val = declaratorPath.node.init;
 
-    // * store variable names
-    const declaratorPath = jsxPath.findParent(t.isVariableDeclarator);
-    if (declaratorPath) {
-      const varName = declaratorPath.node.id.name;
-      jsxVarables[varName] = jsxPath;
+    if (val.type === 'JSXElement') {
+      jsxVariables[varName] = declaratorPath.get('init');
     }
+  },
+  AssignmentExpression(assignmentPath) {
+    const varName = assignmentPath.node.left.name;
+    const val = assignmentPath.node.right;
 
-    const assignmentPath = jsxPath.findParent(t.isAssignmentExpression);
-    if (assignmentPath) {
-      const varName = assignmentPath.node.left.name;
-      jsxVarables[varName] = jsxPath;
+    if (val.type === 'JSXElement') {
+      jsxVariables[varName] = assignmentPath.get('right');
     }
   },
 });
