@@ -52,7 +52,7 @@ function getComponentBodyPath(path, componentFuncPath) {
 function getReactiveNodeForIdentifier(
   identifierPath,
   componentFuncPath,
-  isSetter
+  compiledStatePaths
 ) {
   // propUsed = true;
   const $ = t.identifier('$'); // label
@@ -64,7 +64,7 @@ function getReactiveNodeForIdentifier(
   }
 
   const alreadyReactive = identifierPath.findParent(t.isLabeledStatement);
-  if (alreadyReactive && !isSetter) {
+  if (alreadyReactive) {
     return { parentToBeReplaced: null, reactiveLabel: null };
   }
 
@@ -88,7 +88,7 @@ function getReactiveNodeForIdentifier(
   let reactiveLabel = null;
   const bodyNode = componentBodyPath.node;
 
-  if (bodyNode) {
+  if (bodyNode && !compiledStatePaths.includes(bodyNode)) {
     if (bodyNode.type === 'VariableDeclaration') {
       const asnExp = t.assignmentExpression(
         '=',
@@ -102,6 +102,8 @@ function getReactiveNodeForIdentifier(
     } else {
       componentBodyPath = null;
     }
+  } else {
+    componentBodyPath = null;
   }
 
   return { parentToBeReplaced: componentBodyPath, reactiveLabel };
@@ -197,6 +199,7 @@ function getContainingFunction(path) {
 }
 
 // * processing functions
+const compiledStateBodyNodePaths = [];
 function processProps(idPath, funcPath) {
   const propsNames = getPropNames(funcPath);
 
@@ -205,11 +208,11 @@ function processProps(idPath, funcPath) {
 
   // compile props
   if (propsNames.includes(identifierName)) {
-    console.log('prop used: ' + identifierName);
+    // console.log('prop used: ' + identifierName);
     const { parentToBeReplaced, reactiveLabel } = getReactiveNodeForIdentifier(
       idPath,
       funcPath,
-      false
+      compiledStateBodyNodePaths
     );
 
     if (parentToBeReplaced) {
@@ -246,7 +249,7 @@ function processState(idPath, funcPath) {
     const { parentToBeReplaced, reactiveLabel } = getReactiveNodeForIdentifier(
       idPath,
       funcPath,
-      false
+      compiledStateBodyNodePaths
     );
     if (parentToBeReplaced) parentToBeReplaced.replaceWith(reactiveLabel);
     return true;
@@ -301,6 +304,7 @@ function processState(idPath, funcPath) {
         decNode: vDeclaration,
       };
       setterFunctions[setterFunctionName] = stateVariableName;
+      compiledStateBodyNodePaths.push(vDeclaration);
       return true;
     }
 
@@ -311,19 +315,25 @@ function processState(idPath, funcPath) {
 }
 
 const jsxVariables = {};
-function processJSXVariable(idPath, funcPath) {
-  if (
-    !jsxVariables[idPath.node.name] ||
-    (idPath.container.type !== 'JSXExpressionContainer' &&
-      idPath.container.type !== 'ReturnStatement')
-  ) {
+function processJSXVariable(idPath) {
+  const isRefToJSXVar = jsxVariables[idPath.node.name];
+  const isBeingReturned = idPath.container.type === 'ReturnStatement';
+  const isRefedInJSXExpression =
+    idPath.container.type === 'JSXExpressionContainer';
+
+  if (!isRefToJSXVar || (!isBeingReturned && !isRefedInJSXExpression)) {
+    // * noop
     return false;
   }
 
   const name = idPath.node.name;
 
-  idPath.parentPath.replaceWith(jsxVariables[idPath.node.name].node);
-  getComponentBodyPath(jsxVariables[name], funcPath).remove();
+  if (isBeingReturned) {
+    // * keep the return statement, just dereference the identifier
+    idPath.replaceWith(jsxVariables[idPath.node.name].node);
+  } else {
+    idPath.parentPath.replaceWith(jsxVariables[idPath.node.name].node);
+  }
 }
 
 // * main
@@ -546,18 +556,25 @@ propsNames.forEach((propName) => {
 
 const funcPath = defaultExport.function;
 funcPath.get('body').traverse({
-  Identifier(idPath) {
-    const propsProcessed = processProps(idPath, funcPath); // ! Side Effect: modifies AST
-    if (propsProcessed) return;
+  // ! modifies the jsxVariables object
+  VariableDeclarator(declaratorPath) {
+    const varName = declaratorPath.node.id.name;
+    const val = declaratorPath.node.init;
 
-    // ! modifies AST: replace `useState` call with declarations
-    // ! Replace state access and setterfunc call with reactive variables
-    let useStateReplaced = processState(idPath, funcPath);
-    if (useStateReplaced) return;
-
-    let jsxRemoved = processJSXVariable(idPath, funcPath);
-    if (jsxRemoved) return;
+    if (val.type === 'JSXElement') {
+      jsxVariables[varName] = declaratorPath.get('init');
+    }
   },
+  // ! modifies the jsxVariables object
+  AssignmentExpression(assignmentPath) {
+    const varName = assignmentPath.node.left.name;
+    const val = assignmentPath.node.right;
+
+    if (val.type === 'JSXElement') {
+      jsxVariables[varName] = assignmentPath.get('right');
+    }
+  },
+  // ! throws if JSX is found inside loops or conditionals
   JSXElement(jsxPath) {
     // !throw if inside loop
     const isInLoop = jsxPath.findParent((path) => {
@@ -586,23 +603,25 @@ funcPath.get('body').traverse({
       );
     }
   },
-  VariableDeclarator(declaratorPath) {
-    const varName = declaratorPath.node.id.name;
-    const val = declaratorPath.node.init;
+  Identifier(idPath) {
+    const propsProcessed = processProps(idPath, funcPath); // ! Side Effect: modifies AST
+    if (propsProcessed) return;
 
-    if (val.type === 'JSXElement') {
-      jsxVariables[varName] = declaratorPath.get('init');
-    }
-  },
-  AssignmentExpression(assignmentPath) {
-    const varName = assignmentPath.node.left.name;
-    const val = assignmentPath.node.right;
+    // ! modifies AST: replace `useState` call with declarations
+    // ! Replace state access and setterfunc call with reactive variables
+    let useStateReplaced = processState(idPath, funcPath);
+    if (useStateReplaced) return;
 
-    if (val.type === 'JSXElement') {
-      jsxVariables[varName] = assignmentPath.get('right');
-    }
+    // ! modifies AST: replace references to variables with JSX values with inline JSX
+    let jsxRemoved = processJSXVariable(idPath, funcPath);
+    if (jsxRemoved) return;
   },
 });
+
+// ! modifies AST: remove all JSX assignments to variables
+Object.values(jsxVariables).forEach((jsxVariable) =>
+  getComponentBodyPath(jsxVariable, funcPath).remove()
+);
 
 scriptNodes = scriptNodes.concat(funcPath.node.body.body);
 
