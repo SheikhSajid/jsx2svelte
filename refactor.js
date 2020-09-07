@@ -609,7 +609,7 @@ scriptNodes = scriptNodes.concat(funcPath.node.body.body);
 let out = '<script>\n';
 
 scriptNodes.forEach((node) => {
-  out += '  ' + generate(node, {}).code + '\n\n';
+  out += '  ' + generate(node, { comments: false }).code + '\n\n';
 });
 
 out += '</script>\n\n';
