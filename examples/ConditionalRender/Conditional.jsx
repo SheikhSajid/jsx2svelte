@@ -5,13 +5,13 @@ export default ({ comment }) => {
 
   const [clickCounter, setclickCounter] = useState(0);
 
-  const ClickButton = (
+  const clickButton = (
     <button onClick={() => setclickCounter(clickCounter + 1)}>
       Click here
     </button>
   );
 
-  const Msg = <p>More than 5 clicks! No more allowed!!</p>;
+  const msg = <p>More than 5 clicks! No more allowed!!</p>;
 
   return (
     <div className="comment">
@@ -24,7 +24,7 @@ export default ({ comment }) => {
         dangerouslySetInnerHTML={{ __html: text }}
       ></div>
 
-      {clickCounter <= 5 ? <ClickButton /> : <Msg />}
+      {clickCounter <= 5 ? { clickButton } : { msg }}
     </div>
   );
 };
