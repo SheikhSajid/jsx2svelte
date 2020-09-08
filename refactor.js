@@ -199,12 +199,10 @@ function getContainingFunction(path) {
 }
 
 // * list map helpers
-function getListMapCode({ objName, elementName, jsxElem, keyAttrPath }) {
-  const out = `{#each ${objName} as ${elementName} (${
-    generate(keyAttrPath.node.expression, {}).code
-  })}
-      ${generate(jsxElem, {}).code}
-    {/each}`;
+function getListMapCode({ objName, elementName, jsxElem, key }) {
+  const out = `{#each ${objName} as ${elementName} (${key})}${
+    generate(jsxElem, {}).code
+  }{/each}`;
   // keyNode.remove();
 
   return out;
@@ -218,7 +216,7 @@ function getKeyAttrPath(callExprPath) {
         return;
       }
 
-      keypath = jsxAttrPath.get('value');
+      keypath = jsxAttrPath;
     },
   });
 
@@ -548,11 +546,13 @@ funcPath.get('body').traverse({
       }
 
       keyAttrPath = getKeyAttrPath(callExprPath);
+      const keyCode = generate(keyAttrPath.node.value.expression, {}).code;
+      keyAttrPath.remove();
       const loopCodeString = getListMapCode({
         objName,
         elementName,
         jsxElem,
-        keyAttrPath,
+        key: keyCode,
       });
       const loopJSXElem = getLoopNode(loopCodeString); // HTMLxBlock
       // console.log(generate(loopJSXElem).code);
@@ -562,7 +562,6 @@ funcPath.get('body').traverse({
       } else {
         callExprPath.replaceWith(loopJSXElem);
       }
-      keyAttrPath.remove();
 
       listMaps.push({ objName, elementName, jsxElem, keyAttrPath });
     }
@@ -583,6 +582,34 @@ funcPath.get('body').traverse({
   },
 });
 
+funcPath.get('body').traverse({
+  VariableDeclarator(declaratorPath) {
+    const varName = declaratorPath.node.id.name;
+    const val = declaratorPath.node.init;
+
+    if (
+      val.type === 'JSXElement' &&
+      val.openingElement.name.name === 'HTMLxBlock'
+    ) {
+      jsxVariables[varName] = declaratorPath.get('init');
+    }
+  },
+  AssignmentExpression(assignmentPath) {
+    const varName = assignmentPath.node.left.name;
+    const val = assignmentPath.node.right;
+
+    if (
+      val.type === 'JSXElement' &&
+      val.openingElement.name.name === 'HTMLxBlock'
+    ) {
+      jsxVariables[varName] = assignmentPath.get('right');
+    }
+  },
+  Identifier(idPath) {
+    processJSXVariable(idPath, funcPath);
+  },
+});
+
 // ! modifies AST: remove all JSX assignments to variables
 Object.values(jsxVariables).forEach((jsxVariable) =>
   getComponentBodyPath(jsxVariable, funcPath).remove()
@@ -598,6 +625,9 @@ scriptNodes.forEach((node) => {
 
 out += '</script>\n\n';
 
+out = out.replace(/<HTMLxBlock>{"/g, '');
+out = out.replace(/"}<\/HTMLxBlock>/g, '');
+
 console.log(out);
 
-// fs.writeFileSync(`./out/out${Date.now()}.svelte`, out, { encoding: 'utf8' });
+fs.writeFileSync(`./out/out${Date.now()}.svelte`, out, { encoding: 'utf8' });
