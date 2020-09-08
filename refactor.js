@@ -355,40 +355,6 @@ const allJSXReturns = [];
 const defaultExport = {};
 
 const exportDetectionPlugin = {
-  // JSXElement(jsxPath) {
-  //   // !throw if inside loop
-  //   const isInLoop = jsxPath.findParent((path) => {
-  //     return (
-  //       t.isForXStatement(path) || t.isForStatement(path) || t.isWhile(path)
-  //     );
-  //   });
-
-  //   if (isInLoop) {
-  //     throw Error('JSX inside loops cannot be compiled');
-  //   }
-
-  //   // ! throw if inside conditional
-  //   const isInConditional = jsxPath.findParent(t.isConditional);
-  //   if (isInConditional) {
-  //     throw Error('JSX inside conditionals cannot be compiled');
-  //   }
-
-  //   // * store variable names
-  //   const declaratorPath = jsxPath.findParent(t.isVariableDeclarator);
-  //   if (declaratorPath) {
-  //     const varName = declaratorPath.node.id.name;
-  //     jsxVarables[varName] = jsxPath;
-  //   }
-
-  //   const assignmentPath = jsxPath.findParent(t.isAssignmentExpression);
-  //   if (assignmentPath) {
-  //     const varName = assignmentPath.node.left.name;
-  //     jsxVarables[varName] = jsxPath;
-  //   }
-
-  //   // * detect if inside a function
-  //   // const isInFunction = getContainingFunction(jsxPath);
-  // },
   ExportDefaultDeclaration(exportPath) {
     switch (exportPath.node.declaration.type) {
       case 'Identifier':
@@ -412,97 +378,6 @@ const exportDetectionPlugin = {
         break;
     }
   },
-  // FunctionDeclaration(funcPath) {
-  //   // ! might throw exception
-  //   const isExportedJSXComponent = checkIfTargetJSXComponent(funcPath);
-
-  //   if (!isExportedJSXComponent) {
-  //     return;
-  //   }
-
-  //   //== prop export statements ==//
-  //   const propsNames = getPropNames(funcPath);
-
-  //   // * add export statement for each prop
-  //   propsNames.forEach((propName) => {
-  //     scriptNodes.push(getExportNodeForProp(propName));
-  //   });
-
-  //   //== traverse function body ==//
-  //   funcPath.get('body').traverse({
-  //     Identifier(idPath) {
-  //       const propsProcessed = processProps(idPath, funcPath); // ! Side Effect: modifies AST
-  //       if (propsProcessed) return;
-
-  //       // ! modifies AST: replace `useState` call with declarations
-  //       // ! Replace state access and setterfunc call with reactive variables
-  //       let useStateReplaced = processState(idPath, funcPath);
-  //       if (useStateReplaced) return;
-
-  //       let jsxRemoved = processJSXVariables(idPath, funcPath);
-  //       if (jsxRemoved) return;
-  //     },
-  //     // ! Side Effects: changes allJSXReturns, jsxElements
-  //     ReturnStatement(returnPath) {
-  //       const containingFunction = returnPath.getFunctionParent();
-
-  //       if (returnPath.node.argument.type === 'JSXElement') {
-  //         allJSXReturns.push(returnPath);
-  //         const jsxElement = returnPath.get('argument');
-  //         const containingFunctionName = containingFunction.node.id.name;
-
-  //         if (containingFunction === funcPath) {
-  //           // main return statement of the component
-  //           jsxElements.mainJSXElementPath = jsxElement;
-  //         } else {
-  //           // function in the body that returns JSX
-  //           others[containingFunctionName] = {
-  //             jsxElement,
-  //             containingFunctionPath: containingFunction,
-  //           };
-  //         }
-  //       } else {
-  //         // ? Identify and remember any variables that store JSX (using Identifier visitor)
-  //         // TODO: 1. Detect if returned Identifier resolves to JSX
-  //         // TODO: 2. Replace the function calls with JSX element
-  //       }
-  //     },
-  //     JSXElement(jsxElemPath) {
-  //       // * 1. Inside a if statement or function
-  //       const isInsideIf = jsxElemPath.findParent(t.isIfStatement);
-  //       if (isInsideIf) {
-  //         throw SyntaxError(
-  //           'HTMLx tags cannot be assigned to variables inside of if blocks'
-  //         );
-  //       }
-
-  //       const funcDecl = jsxElemPath.getFunctionParent();
-  //       if (funcDecl !== funcPath) {
-  //         throw SyntaxError(
-  //           'Svelte does not support functional components. It seems like you have a JSX element inside function: ' +
-  //             funcDecl.node.id.name
-  //         );
-  //       }
-  //     },
-  //   });
-
-  //   //== traverse returned JSX ==//
-  //   jsxElements.mainJSXElementPath.traverse({
-  //     JSXIdentifier(jsxPath) {
-  //       // TODO: inline JSX variables and function calls
-
-  //       // ! replace `className` with `class`
-  //       if (jsxPath.node.name === 'className') {
-  //         jsxPath.node.name = 'class';
-  //       }
-  //     },
-  //   });
-
-  //   allJSXReturns.forEach((retPath) => retPath.remove());
-
-  //   //== push the processed function body for code generation ==//
-  //   funcPath.node.body.body.forEach((bodyNode) => scriptNodes.push(bodyNode));
-  // },
 };
 
 traverse(ast, exportDetectionPlugin);
