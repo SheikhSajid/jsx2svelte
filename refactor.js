@@ -486,7 +486,8 @@ funcPath.get('body').traverse({
       jsxVariables[varName] = assignmentPath.get('right');
     }
   },
-  // ! throws if JSX is found inside loops or conditionals
+  // ! throws if JSX is found inside a loop, conditional body or a function
+  // !   that is not a callback to list.map
   JSXElement(jsxPath) {
     // !throw if inside loop
     const isInLoop = jsxPath.findParent((path) => {
@@ -521,6 +522,7 @@ funcPath.get('body').traverse({
       );
     }
   },
+  // ! replace call to `list.map` with <HTMLxBlock> JSX element
   CallExpression(callExprPath) {
     const callNode = callExprPath.node;
 
@@ -560,10 +562,12 @@ funcPath.get('body').traverse({
       } else {
         callExprPath.replaceWith(loopJSXElem);
       }
+      keyAttrPath.remove();
 
       listMaps.push({ objName, elementName, jsxElem, keyAttrPath });
     }
   },
+  // ! props and state processing, JSX variable inlining
   Identifier(idPath) {
     const propsProcessed = processProps(idPath, funcPath); // ! Side Effect: modifies AST
     if (propsProcessed) return;
