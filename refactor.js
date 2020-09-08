@@ -630,4 +630,12 @@ out = out.replace(/"}<\/HTMLxBlock>/g, '');
 
 console.log(out);
 
-fs.writeFileSync(`./out/out${Date.now()}.svelte`, out, { encoding: 'utf8' });
+const path = `./out/out${Date.now()}.svelte`;
+
+if (!fs.existsSync(`./out`))
+    fs.mkdirSync(`./out`);
+
+const fsp = fs.promises;
+fsp.readFile(path).catch(() => {
+    fsp.writeFile(path, out, { encoding: 'utf8'});
+});
