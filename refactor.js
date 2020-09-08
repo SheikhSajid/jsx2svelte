@@ -198,15 +198,40 @@ function getContainingFunction(path) {
   return { name, path: func };
 }
 
-function getListMapCode({ objName, elementName, jsxElem, keyNode }) {
+// * list map helpers
+function getListMapCode({ objName, elementName, jsxElem, keyAttrPath }) {
   const out = `{#each ${objName} as ${elementName} (${
-    generate(keyNode.node.expression, {}).code
+    generate(keyAttrPath.node.expression, {}).code
   })}
       ${generate(jsxElem, {}).code}
     {/each}`;
-  keyNode.remove();
+  // keyNode.remove();
 
   return out;
+}
+
+function getKeyAttrPath(callExprPath) {
+  let keypath = null;
+  callExprPath.traverse({
+    JSXAttribute(jsxAttrPath) {
+      if (jsxAttrPath.node.name.name !== 'key') {
+        return;
+      }
+
+      keypath = jsxAttrPath.get('value');
+    },
+  });
+
+  return keypath;
+}
+
+function getLoopNode(codeString) {
+  const openingElem = t.jsxOpeningElement(t.jsxIdentifier('HTMLxBlock'), []);
+  const closingElem = t.jsxClosingElement(t.jsxIdentifier('HTMLxBlock'));
+  const jsxExpr = t.jsxExpressionContainer(t.stringLiteral(codeString));
+  const children = [jsxExpr];
+
+  return t.jsxElement(openingElem, closingElem, children);
 }
 
 // * processing functions
@@ -483,12 +508,14 @@ funcPath.get('body').traverse({
     // ! throw if inside a function
     const funcDecl = jsxPath.findParent(t.isFunction);
     const callExpr = jsxPath.findParent(t.isCallExpression);
-    if (
-      funcDecl !== funcPath &&
-      (!callExpr ||
-        callExpr.node.callee.type !== 'MemberExpression' ||
-        callExpr.node.callee.property.name !== 'map')
-    ) {
+
+    const funcIsInComponentBody = funcDecl === funcPath;
+    const funcIsCallbackPassedToListMap =
+      callExpr &&
+      callExpr.node.callee.type === 'MemberExpression' &&
+      callExpr.node.callee.property.name === 'map';
+
+    if (!funcIsInComponentBody && !funcIsCallbackPassedToListMap) {
       throw Error(
         'It seems like you have a JSX element inside function. This is not supported.'
       );
@@ -504,7 +531,7 @@ funcPath.get('body').traverse({
       const callback = callNode.arguments[0];
       const objName = callNode.callee.object.name;
       const elementName = callback.params[0].name;
-      let keyNode = {};
+      let keyAttrPath;
       let jsxElem = {};
 
       if (callback.body.type === 'JSXElement') {
@@ -518,17 +545,23 @@ funcPath.get('body').traverse({
         return;
       }
 
-      callExprPath.traverse({
-        JSXAttribute(jsxAttrPath) {
-          if (jsxAttrPath.node.name.name !== 'key') {
-            return;
-          }
-
-          keyNode = jsxAttrPath.get('value');
-        },
+      keyAttrPath = getKeyAttrPath(callExprPath);
+      const loopCodeString = getListMapCode({
+        objName,
+        elementName,
+        jsxElem,
+        keyAttrPath,
       });
+      const loopJSXElem = getLoopNode(loopCodeString); // HTMLxBlock
+      // console.log(generate(loopJSXElem).code);
+      const jsxExpr = callExprPath.findParent(t.isJSXExpressionContainer);
+      if (jsxExpr) {
+        jsxExpr.replaceWith(loopJSXElem);
+      } else {
+        callExprPath.replaceWith(loopJSXElem);
+      }
 
-      listMaps.push({ objName, elementName, jsxElem, keyNode });
+      listMaps.push({ objName, elementName, jsxElem, keyAttrPath });
     }
   },
   Identifier(idPath) {
