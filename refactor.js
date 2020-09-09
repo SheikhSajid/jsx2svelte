@@ -198,6 +198,46 @@ function getContainingFunction(path) {
   return { name, path: func };
 }
 
+// useEffect() helpers
+function isUseEffectCall(callExprPath) {
+  const callee = callExprPath.node.callee;
+
+  // useEffect()
+  if (callee.type === 'Identifier' && callee.name === 'useEffect') {
+    return true;
+  } else if (
+    // React.useEffect()
+    callee.type === 'MemberExpression' &&
+    callee.object.name === 'React' &&
+    callee.object.property === 'useEffect'
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function isOnMount(argsPath) {
+  const args = argsPath;
+
+  if (
+    args[1].node.type === 'ArrayExpression' &&
+    args[1].node.elements.length === 0
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function buildNamedImportNode(specifiers, source) {
+  const specifierNodes = specifiers.map((sp) => {
+    return t.importSpecifier(t.identifier(sp), t.identifier(sp));
+  });
+
+  return t.importDeclaration(specifierNodes, t.stringLiteral(source));
+}
+
 // * list map helpers
 function getListMapCode({ objName, elementName, jsxElem, key }) {
   const out = `{#each ${objName} as ${elementName} (${key})}${
@@ -467,6 +507,8 @@ propsNames.forEach((propName) => {
 const listMaps = [];
 const funcPath = defaultExport.function;
 
+const namedImportsFromSvelte = {};
+
 funcPath.get('body').traverse({
   JSXAttribute(attrPath) {
     // replace on<Event> attrs. E.g. onClick -> on:click
@@ -585,6 +627,27 @@ funcPath.get('body').traverse({
       }
 
       listMaps.push({ objName, elementName, jsxElem, keyAttrPath });
+      return;
+    }
+
+    if (isUseEffectCall(callExprPath)) {
+      if (
+        callExprPath.node.arguments[0].type !== 'FunctionExpression' &&
+        callExprPath.node.arguments[0].type !== 'ArrowFunctionExpression'
+      ) {
+        throw Error(
+          'The first argument passed to useEffect must be a function expression.'
+        );
+      }
+
+      if (isOnMount(callExprPath.get('arguments'))) {
+        // import for onMount
+        namedImportsFromSvelte.onMount = true;
+
+        // call expression, onMount(cb)
+        callExprPath.get('callee').replaceWith(t.identifier('onMount'));
+        callExprPath.set('arguments', [callExprPath.get('arguments.0').node]);
+      }
     }
   },
   // ! props and state processing, JSX variable inlining
@@ -637,6 +700,13 @@ funcPath.get('body').traverse({
     returnPath.remove();
   },
 });
+
+const svelteImport = buildNamedImportNode(
+  Object.keys(namedImportsFromSvelte),
+  'svelte'
+);
+
+scriptNodes.unshift(svelteImport);
 
 // ! modifies AST: remove all JSX assignments to variables
 Object.values(jsxVariables).forEach((jsxVariable) =>
