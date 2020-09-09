@@ -697,7 +697,9 @@ funcPath.get('body').traverse({
 
 funcPath.get('body').traverse({
   ReturnStatement(returnPath) {
-    htmlxCode = generate(returnPath.node.argument, { comments: false }).code;
+    if (returnPath.node.argument.type === 'JSXElement') {
+      htmlxCode = generate(returnPath.node.argument, { comments: false }).code;
+    }
     returnPath.remove();
   },
 });
