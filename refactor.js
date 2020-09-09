@@ -373,6 +373,7 @@ function processJSXVariable(idPath) {
 // * main
 let scriptNodes = [];
 const jsxElements = { mainJSXElementPath: {}, others: {} };
+let htmlxCode = '';
 const allJSXReturns = [];
 
 const defaultExport = {};
@@ -630,6 +631,13 @@ funcPath.get('body').traverse({
   },
 });
 
+funcPath.get('body').traverse({
+  ReturnStatement(returnPath) {
+    htmlxCode = generate(returnPath.node.argument, { comments: false }).code;
+    returnPath.remove();
+  },
+});
+
 // ! modifies AST: remove all JSX assignments to variables
 Object.values(jsxVariables).forEach((jsxVariable) =>
   getComponentBodyPath(jsxVariable, funcPath).remove()
@@ -644,6 +652,8 @@ scriptNodes.forEach((node) => {
 });
 
 out += '</script>\n\n';
+
+out += htmlxCode;
 
 out = out.replace(/<HTMLxBlock>{"/g, '');
 out = out.replace(/"}<\/HTMLxBlock>/g, '');
