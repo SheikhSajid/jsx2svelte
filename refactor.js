@@ -465,6 +465,26 @@ propsNames.forEach((propName) => {
 
 const listMaps = [];
 const funcPath = defaultExport.function;
+
+funcPath.get('body').traverse({
+  JSXAttribute(attrPath) {
+    // replace on<Event> attrs. E.g. onClick -> on:click
+    const attrName = attrPath.node.name.name;
+    const eventAttr = /^on([a-z]+)$/i.exec(attrName);
+
+    if (eventAttr) {
+      const eventName = eventAttr[1];
+
+      const newAttrName = t.jsxNamespacedName(
+        t.jsxIdentifier('on'),
+        t.jsxIdentifier(eventName.toLowerCase())
+      );
+
+      attrPath.get('name').replaceWith(newAttrName);
+    }
+  },
+});
+
 funcPath.get('body').traverse({
   // ! modifies the jsxVariables object
   VariableDeclarator(declaratorPath) {
