@@ -599,12 +599,13 @@ funcPath.get('body').traverse({
 
       if (callback.body.type === 'JSXElement') {
         jsxElem = callback.body;
-      } else if (callback.body.body[0].type === 'ReturnStatement') {
+      } else if (
+        callback.body.type === 'BlockStatement' &&
+        callback.body.body[0].type === 'ReturnStatement' &&
+        callback.body.body[0].argument.type === 'JSXElement'
+      ) {
         jsxElem = callback.body.body[0].argument;
       } else {
-        console.warn(
-          'Callback passed to map must return JSX and cannot have other code in its body'
-        );
         return;
       }
 
@@ -730,4 +731,4 @@ out = out.replace(/"}<\/HTMLxBlock>/g, '');
 
 console.log(out);
 
-fs.writeFileSync(`./out/out${Date.now()}.svelte`, out, { encoding: 'utf8' });
+// fs.writeFileSync(`./out/out${Date.now()}.svelte`, out, { encoding: 'utf8' });
