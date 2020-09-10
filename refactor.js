@@ -221,6 +221,7 @@ function isOnMount(argsPath) {
   const args = argsPath;
 
   if (
+    args.length >= 2 &&
     args[1].node.type === 'ArrayExpression' &&
     args[1].node.elements.length === 0
   ) {
@@ -247,6 +248,18 @@ function getReturnVal(callBackPath) {
   });
 
   return retVal;
+}
+
+function isAfterUpdate(argsPath) {
+  if (argsPath.length === 2) {
+    if (
+      argsPath[1].node.type === 'ArrayExpression' &&
+      argsPath[1].node.elements.length > 0
+    )
+      return true;
+  }
+
+  return false;
 }
 
 // * list map helpers
@@ -680,6 +693,15 @@ funcPath.get('body').traverse({
         // call expression, onMount(cb)
         callExprPath.get('callee').replaceWith(t.identifier('onMount'));
         callExprPath.set('arguments', [callExprPath.get('arguments.0').node]);
+        return;
+      }
+
+      if (isAfterUpdate(callExprPath.get('arguments'))) {
+        namedImportsFromSvelte.afterUpdate = true;
+
+        callExprPath.get('callee').replaceWith(t.identifier('afterUpdate'));
+        callExprPath.set('arguments', [callExprPath.get('arguments.0').node]);
+        return;
       }
     }
   },
