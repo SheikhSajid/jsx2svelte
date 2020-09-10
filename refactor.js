@@ -262,6 +262,14 @@ function isAfterUpdate(argsPath) {
   return false;
 }
 
+function removeReturn(argsPath) {
+  argsPath.traverse({
+    ReturnStatement(retPath) {
+      retVal = retPath.remove();
+    },
+  });
+}
+
 // * list map helpers
 function getListMapCode({ objName, elementName, jsxElem, key }) {
   const out = `{#each ${objName} as ${elementName} (${key})}${
@@ -684,6 +692,7 @@ funcPath.get('body').traverse({
           returnVal.node,
         ]);
         callExprPath.insertAfter(onDestroyCall);
+        removeReturn(callExprPath.get('arguments.0'));
       }
 
       if (isOnMount(callExprPath.get('arguments'))) {
@@ -753,8 +762,8 @@ funcPath.get('body').traverse({
   ReturnStatement(returnPath) {
     if (returnPath.node.argument.type === 'JSXElement') {
       htmlxCode = generate(returnPath.node.argument, { comments: false }).code;
+      returnPath.remove();
     }
-    returnPath.remove();
   },
 });
 
