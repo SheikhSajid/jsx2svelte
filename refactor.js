@@ -198,6 +198,91 @@ function getContainingFunction(path) {
   return { name, path: func };
 }
 
+// useEffect() helpers
+function isUseEffectCall(callExprPath) {
+  const callee = callExprPath.node.callee;
+
+  // useEffect()
+  if (callee.type === 'Identifier' && callee.name === 'useEffect') {
+    return true;
+  } else if (
+    // React.useEffect()
+    callee.type === 'MemberExpression' &&
+    callee.object.name === 'React' &&
+    callee.object.property === 'useEffect'
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function isOnMount(argsPath) {
+  const args = argsPath;
+
+  if (
+    args.length >= 2 &&
+    args[1].node.type === 'ArrayExpression' &&
+    args[1].node.elements.length === 0
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function buildNamedImportNode(specifiers, source) {
+  const specifierNodes = specifiers.map((sp) => {
+    return t.importSpecifier(t.identifier(sp), t.identifier(sp));
+  });
+
+  return t.importDeclaration(specifierNodes, t.stringLiteral(source));
+}
+
+function getReturnVal(callBackPath) {
+  let retVal = null;
+  callBackPath.traverse({
+    ReturnStatement(retPath) {
+      retVal = retPath.get('argument');
+    },
+  });
+
+  if (!retVal && callBackPath.get('body').type !== 'BlockStatement') {
+    retVal = callBackPath.get('body');
+  }
+
+  return retVal;
+}
+
+function isAfterUpdate(argsPath) {
+  if (argsPath.length === 2) {
+    if (
+      argsPath[1].node.type === 'ArrayExpression' &&
+      argsPath[1].node.elements.length > 0
+    )
+      return true;
+  }
+
+  return false;
+}
+
+function removeReturn(callbackPath) {
+  let ret = null;
+  const callbackBody = callbackPath.node.body;
+
+  if (callbackBody.type !== 'BlockStatement') {
+    return callbackPath.findParent(t.isCallExpression);
+  }
+
+  callbackPath.traverse({
+    ReturnStatement(retPath) {
+      ret = retPath;
+    },
+  });
+
+  return ret;
+}
+
 // * list map helpers
 function getListMapCode({ objName, elementName, jsxElem, key }) {
   const out = `{#each ${objName} as ${elementName} (${key})}${
@@ -373,6 +458,7 @@ function processJSXVariable(idPath) {
 // * main
 let scriptNodes = [];
 const jsxElements = { mainJSXElementPath: {}, others: {} };
+let htmlxCode = '';
 const allJSXReturns = [];
 
 const defaultExport = {};
@@ -400,6 +486,13 @@ const exportDetectionPlugin = {
         throw Error('Input file has to export a function that returns JSX');
         break;
     }
+  },
+  ImportDeclaration(importPath) {
+    if (importPath.node.source.value === 'react') {
+      return;
+    }
+
+    scriptNodes.push(importPath.node);
   },
 };
 
@@ -465,6 +558,28 @@ propsNames.forEach((propName) => {
 
 const listMaps = [];
 const funcPath = defaultExport.function;
+
+const namedImportsFromSvelte = {};
+
+funcPath.get('body').traverse({
+  JSXAttribute(attrPath) {
+    // replace on<Event> attrs. E.g. onClick -> on:click
+    const attrName = attrPath.node.name.name;
+    const eventAttr = /^on([a-z]+)$/i.exec(attrName);
+
+    if (eventAttr) {
+      const eventName = eventAttr[1];
+
+      const newAttrName = t.jsxNamespacedName(
+        t.jsxIdentifier('on'),
+        t.jsxIdentifier(eventName.toLowerCase())
+      );
+
+      attrPath.get('name').replaceWith(newAttrName);
+    }
+  },
+});
+
 funcPath.get('body').traverse({
   // ! modifies the jsxVariables object
   VariableDeclarator(declaratorPath) {
@@ -536,12 +651,13 @@ funcPath.get('body').traverse({
 
       if (callback.body.type === 'JSXElement') {
         jsxElem = callback.body;
-      } else if (callback.body.body[0].type === 'ReturnStatement') {
+      } else if (
+        callback.body.type === 'BlockStatement' &&
+        callback.body.body[0].type === 'ReturnStatement' &&
+        callback.body.body[0].argument.type === 'JSXElement'
+      ) {
         jsxElem = callback.body.body[0].argument;
       } else {
-        console.warn(
-          'Callback passed to map must return JSX and cannot have other code in its body'
-        );
         return;
       }
 
@@ -564,6 +680,66 @@ funcPath.get('body').traverse({
       }
 
       listMaps.push({ objName, elementName, jsxElem, keyAttrPath });
+      return;
+    }
+
+    if (isUseEffectCall(callExprPath)) {
+      const firstArg = callNode.arguments[0];
+      if (
+        firstArg.type !== 'FunctionExpression' &&
+        firstArg.type !== 'ArrowFunctionExpression'
+      ) {
+        throw Error(
+          'The first argument passed to useEffect must be a function expression.'
+        );
+      }
+
+      // cleanup
+      const returnVal = getReturnVal(callExprPath.get('arguments.0'));
+      if (returnVal) {
+        // onDestroy
+        if (
+          returnVal.type !== 'FunctionExpression' &&
+          returnVal.type !== 'ArrowFunctionExpression'
+        ) {
+          throw Error(
+            'Cleanup function must be returned as a function expression.'
+          );
+        }
+
+        namedImportsFromSvelte.onDestroy = true;
+        const onDestroyCall = t.callExpression(t.identifier('onDestroy'), [
+          returnVal.node,
+        ]);
+        callExprPath.insertAfter(onDestroyCall);
+        const pathToRemove = removeReturn(callExprPath.get('arguments.0'));
+        const shouldReturn = pathToRemove.node === callExprPath.node;
+        if (pathToRemove) {
+          pathToRemove.remove();
+        }
+
+        if (shouldReturn) {
+          return;
+        }
+      }
+
+      if (isOnMount(callExprPath.get('arguments'))) {
+        // import for onMount
+        namedImportsFromSvelte.onMount = true;
+
+        // call expression, onMount(cb)
+        callExprPath.get('callee').replaceWith(t.identifier('onMount'));
+        callExprPath.set('arguments', [callExprPath.get('arguments.0').node]);
+        return;
+      }
+
+      if (isAfterUpdate(callExprPath.get('arguments'))) {
+        namedImportsFromSvelte.afterUpdate = true;
+
+        callExprPath.get('callee').replaceWith(t.identifier('afterUpdate'));
+        callExprPath.set('arguments', [callExprPath.get('arguments.0').node]);
+        return;
+      }
     }
   },
   // ! props and state processing, JSX variable inlining
@@ -610,6 +786,22 @@ funcPath.get('body').traverse({
   },
 });
 
+funcPath.get('body').traverse({
+  ReturnStatement(returnPath) {
+    if (returnPath.node.argument.type === 'JSXElement') {
+      htmlxCode = generate(returnPath.node.argument, { comments: false }).code;
+      returnPath.remove();
+    }
+  },
+});
+
+const svelteImport = buildNamedImportNode(
+  Object.keys(namedImportsFromSvelte),
+  'svelte'
+);
+
+scriptNodes.unshift(svelteImport);
+
 // ! modifies AST: remove all JSX assignments to variables
 Object.values(jsxVariables).forEach((jsxVariable) =>
   getComponentBodyPath(jsxVariable, funcPath).remove()
@@ -624,6 +816,8 @@ scriptNodes.forEach((node) => {
 });
 
 out += '</script>\n\n';
+
+out += htmlxCode;
 
 out = out.replace(/<HTMLxBlock>{"/g, '');
 out = out.replace(/"}<\/HTMLxBlock>/g, '');
