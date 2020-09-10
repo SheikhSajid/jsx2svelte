@@ -198,18 +198,15 @@ function getContainingFunction(path) {
   return { name, path: func };
 }
 
-// useEffect() helpers
-function isUseEffectCall(callExprPath) {
+function isCallToBuiltInHook(callExprPath, hookName) {
   const callee = callExprPath.node.callee;
 
-  // useEffect()
-  if (callee.type === 'Identifier' && callee.name === 'useEffect') {
+  if (callee.type === 'Identifier' && callee.name === hookName) {
     return true;
   } else if (
-    // React.useEffect()
     callee.type === 'MemberExpression' &&
     callee.object.name === 'React' &&
-    callee.object.property === 'useEffect'
+    callee.object.property === hookName
   ) {
     return true;
   }
@@ -217,6 +214,7 @@ function isUseEffectCall(callExprPath) {
   return false;
 }
 
+// useEffect() helpers
 function isOnMount(argsPath) {
   const args = argsPath;
 
@@ -683,7 +681,7 @@ funcPath.get('body').traverse({
       return;
     }
 
-    if (isUseEffectCall(callExprPath)) {
+    if (isCallToBuiltInHook(callExprPath, 'useEffect')) {
       const firstArg = callNode.arguments[0];
       if (
         firstArg.type !== 'FunctionExpression' &&
