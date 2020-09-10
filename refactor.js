@@ -632,9 +632,10 @@ funcPath.get('body').traverse({
     }
 
     if (isUseEffectCall(callExprPath)) {
+      const firstArg = callNode.arguments[0];
       if (
-        callExprPath.node.arguments[0].type !== 'FunctionExpression' &&
-        callExprPath.node.arguments[0].type !== 'ArrowFunctionExpression'
+        firstArg.type !== 'FunctionExpression' &&
+        firstArg.type !== 'ArrowFunctionExpression'
       ) {
         throw Error(
           'The first argument passed to useEffect must be a function expression.'
