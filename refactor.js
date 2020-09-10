@@ -738,6 +738,8 @@ funcPath.get('body').traverse({
         callExprPath.set('arguments', [callExprPath.get('arguments.0').node]);
         return;
       }
+
+      return;
     }
   },
   // ! props and state processing, JSX variable inlining
