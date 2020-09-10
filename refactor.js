@@ -238,6 +238,17 @@ function buildNamedImportNode(specifiers, source) {
   return t.importDeclaration(specifierNodes, t.stringLiteral(source));
 }
 
+function getReturnVal(callBackPath) {
+  let retVal = null;
+  callBackPath.traverse({
+    ReturnStatement(retPath) {
+      retVal = retPath.get('argument');
+    },
+  });
+
+  return retVal;
+}
+
 // * list map helpers
 function getListMapCode({ objName, elementName, jsxElem, key }) {
   const out = `{#each ${objName} as ${elementName} (${key})}${
@@ -640,6 +651,26 @@ funcPath.get('body').traverse({
         throw Error(
           'The first argument passed to useEffect must be a function expression.'
         );
+      }
+
+      // cleanup
+      const returnVal = getReturnVal(callExprPath.get('arguments.0'));
+      if (returnVal) {
+        // onDestroy
+        if (
+          returnVal.type !== 'FunctionExpression' &&
+          returnVal.type !== 'ArrowFunctionExpression'
+        ) {
+          throw Error(
+            'Cleanup function must be returned as a function expression.'
+          );
+        }
+
+        namedImportsFromSvelte.onDestroy = true;
+        const onDestroyCall = t.callExpression(t.identifier('onDestroy'), [
+          returnVal.node,
+        ]);
+        callExprPath.insertAfter(onDestroyCall);
       }
 
       if (isOnMount(callExprPath.get('arguments'))) {
