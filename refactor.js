@@ -487,6 +487,13 @@ const exportDetectionPlugin = {
         break;
     }
   },
+  ImportDeclaration(importPath) {
+    if (importPath.node.source.value === 'react') {
+      return;
+    }
+
+    scriptNodes.push(importPath.node);
+  },
 };
 
 traverse(ast, exportDetectionPlugin);
