@@ -247,6 +247,10 @@ function getReturnVal(callBackPath) {
     },
   });
 
+  if (!retVal && callBackPath.get('body').type !== 'BlockStatement') {
+    retVal = callBackPath.get('body');
+  }
+
   return retVal;
 }
 
@@ -262,12 +266,21 @@ function isAfterUpdate(argsPath) {
   return false;
 }
 
-function removeReturn(argsPath) {
-  argsPath.traverse({
+function removeReturn(callbackPath) {
+  let ret = null;
+  const callbackBody = callbackPath.node.body;
+
+  if (callbackBody.type !== 'BlockStatement') {
+    return callbackPath.findParent(t.isCallExpression);
+  }
+
+  callbackPath.traverse({
     ReturnStatement(retPath) {
-      retVal = retPath.remove();
+      ret = retPath;
     },
   });
+
+  return ret;
 }
 
 // * list map helpers
@@ -692,7 +705,15 @@ funcPath.get('body').traverse({
           returnVal.node,
         ]);
         callExprPath.insertAfter(onDestroyCall);
-        removeReturn(callExprPath.get('arguments.0'));
+        const pathToRemove = removeReturn(callExprPath.get('arguments.0'));
+        const shouldReturn = pathToRemove.node === callExprPath.node;
+        if (pathToRemove) {
+          pathToRemove.remove();
+        }
+
+        if (shouldReturn) {
+          return;
+        }
       }
 
       if (isOnMount(callExprPath.get('arguments'))) {
