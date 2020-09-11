@@ -878,6 +878,8 @@ out += htmlxCode;
 
 out = out.replace(/<HTMLxBlock>{"/g, '');
 out = out.replace(/"}<\/HTMLxBlock>/g, '');
+out = out.replace(/\\n/g, '\n');
+out = out.replace(/\\r/g, '\r');
 
 console.log(out);
 
