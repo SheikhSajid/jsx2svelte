@@ -613,7 +613,10 @@ funcPath.get('body').traverse({
 
     // ! throw if inside conditional
     const isInConditional = jsxPath.findParent(t.isConditional);
-    if (isInConditional) {
+    const isInJSXExpression =
+      isInConditional &&
+      isInConditional.container.type === 'JSXExpressionContainer';
+    if (isInConditional && !isInJSXExpression) {
       throw Error('JSX inside conditionals cannot be compiled');
     }
 
@@ -780,6 +783,29 @@ funcPath.get('body').traverse({
 
       const container = condPath.findParent(t.isJSXExpressionContainer);
       container.replaceWith(htmlxBlock);
+    }
+  },
+  ConditionalExpression(condPath) {
+    if (
+      condPath.get('consequent').type === 'JSXElement' &&
+      condPath.get('alternate').type === 'JSXElement'
+    ) {
+      const testCode = generate(condPath.get('test').node, {}).code;
+      const consequentCode = generate(condPath.get('consequent').node, {}).code;
+      const alternateCode = generate(condPath.get('alternate').node, {}).code;
+
+      const svelteIfElseStatementCode =
+        '{#if ' +
+        testCode +
+        '}\n' +
+        consequentCode +
+        '\n' +
+        '{:else}\n' +
+        alternateCode +
+        '\n{/if}\n';
+      const htmlxBlock = buildHtmlxNode(svelteIfElseStatementCode);
+      const jsxExprContainer = condPath.findParent(t.isJSXExpressionContainer);
+      jsxExprContainer.replaceWith(htmlxBlock);
     }
   },
 });
