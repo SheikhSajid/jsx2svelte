@@ -763,6 +763,25 @@ funcPath.get('body').traverse({
     let jsxRemoved = processJSXVariable(idPath, funcPath);
     if (jsxRemoved) return;
   },
+  LogicalExpression(condPath) {
+    // inline conditional expression {condition && <JSXElement />}
+    if (condPath.get('right').type === 'JSXElement') {
+      const jsx = generate(condPath.get('right').node, { comments: false })
+        .code;
+
+      // condPath.get('right').remove();
+      const condition = generate(condPath.get('left').node, { comments: false })
+        .code;
+
+      const svelteIfStatementCode =
+        '{#if ' + condition + '}\n' + jsx + '\n' + '{/if}';
+
+      const htmlxBlock = buildHtmlxNode(svelteIfStatementCode);
+
+      const container = condPath.findParent(t.isJSXExpressionContainer);
+      container.replaceWith(htmlxBlock);
+    }
+  },
 });
 
 funcPath.get('body').traverse({
