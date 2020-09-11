@@ -741,6 +741,13 @@ funcPath.get('body').traverse({
 
       return;
     }
+
+    if (isCallToBuiltInHook(callExprPath, 'useCallback')) {
+      const firstArg = callExprPath.get('arguments.0');
+
+      callExprPath.replaceWith(firstArg);
+      return;
+    }
   },
   // ! props and state processing, JSX variable inlining
   Identifier(idPath) {
