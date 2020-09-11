@@ -887,12 +887,14 @@ function compile(code) {
     },
   });
 
-  const svelteImport = buildNamedImportNode(
-    Object.keys(namedImportsFromSvelte),
-    'svelte'
-  );
+  if (Object.keys(namedImportsFromSvelte).length) {
+    const svelteImport = buildNamedImportNode(
+      Object.keys(namedImportsFromSvelte),
+      'svelte'
+    );
 
-  scriptNodes.unshift(svelteImport);
+    scriptNodes.unshift(svelteImport);
+  }
 
   // ! modifies AST: remove all JSX assignments to variables
   Object.values(jsxVariables).forEach((jsxVariable) =>
