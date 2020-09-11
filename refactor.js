@@ -565,6 +565,11 @@ funcPath.get('body').traverse({
     const attrName = attrPath.node.name.name;
     const eventAttr = /^on([a-z]+)$/i.exec(attrName);
 
+    if (attrName === 'className') {
+      attrPath.get('name').replaceWith(t.jsxIdentifier('class'));
+      return;
+    }
+
     if (eventAttr) {
       const eventName = eventAttr[1];
 
