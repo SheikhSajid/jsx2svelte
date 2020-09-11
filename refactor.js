@@ -178,6 +178,22 @@ function getAsmntNodeForSetter(idPath, stateVariableName, funcPath) {
   return { callExprPath, asnExpr };
 }
 
+function buildSetterFunction(stateName, setterName) {
+  return t.functionDeclaration(
+    t.identifier(setterName),
+    [t.identifier('value')],
+    t.blockStatement([
+      t.expressionStatement(
+        t.assignmentExpression(
+          '=',
+          t.identifier(stateName),
+          t.identifier('value')
+        )
+      ),
+    ])
+  );
+}
+
 function getContainingFunction(path) {
   const func = path.getFunctionParent() || {};
   const name = null;
@@ -350,6 +366,8 @@ const stateVariables = {
   /* setterFunctionName, decNode */
 };
 const setterFunctions = {};
+const builtSetterFunctions = [];
+
 function processState(idPath, funcPath) {
   // TODO: detect aliases
   const isStateVariable = stateVariables[idPath.node.name] !== undefined;
@@ -381,7 +399,12 @@ function processState(idPath, funcPath) {
     );
 
     if (!callExprPath) {
-      return false;
+      const funcDecl = buildSetterFunction(
+        setterFunctions[idPath.node.name],
+        idPath.node.name
+      );
+      builtSetterFunctions.push(funcDecl);
+      return true;
     }
 
     callExprPath.replaceWith(asnExpr); // ! replace the function call
@@ -870,6 +893,10 @@ let out = '<script>\n';
 
 scriptNodes.forEach((node) => {
   out += '  ' + generate(node, { comments: false }).code + '\n\n';
+});
+
+builtSetterFunctions.forEach((func) => {
+  out += '  ' + generate(func, { comments: false }).code + '\n\n';
 });
 
 out += '</script>\n\n';
