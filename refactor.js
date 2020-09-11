@@ -306,7 +306,7 @@ function getKeyAttrPath(callExprPath) {
   return keypath;
 }
 
-function getLoopNode(codeString) {
+function buildHtmlxNode(codeString) {
   const openingElem = t.jsxOpeningElement(t.jsxIdentifier('HTMLxBlock'), []);
   const closingElem = t.jsxClosingElement(t.jsxIdentifier('HTMLxBlock'));
   const jsxExpr = t.jsxExpressionContainer(t.stringLiteral(codeString));
@@ -668,7 +668,7 @@ funcPath.get('body').traverse({
         jsxElem,
         key: keyCode,
       });
-      const loopJSXElem = getLoopNode(loopCodeString); // HTMLxBlock
+      const loopJSXElem = buildHtmlxNode(loopCodeString); // HTMLxBlock
       // console.log(generate(loopJSXElem).code);
       const jsxExpr = callExprPath.findParent(t.isJSXExpressionContainer);
       if (jsxExpr) {
