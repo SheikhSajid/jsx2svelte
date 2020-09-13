@@ -1,6 +1,6 @@
 const jsx2svelte = require('../../refactor');
 
-describe('useState hooks compiles properly', () => {
+describe('calls to useState hooks compiles properly', () => {
   const jsx = `
     import React, { useState } from 'react';
 
@@ -48,5 +48,49 @@ describe('useState hooks compiles properly', () => {
   test('variables declations that do not depend on state(s) should be left intact', () => {
     expect(compiledCode).toContain("const anotherVar = 'bla bla'");
     expect(compiledCode).not.toContain("$: anotherVar = 'bla bla'");
+  });
+});
+
+describe('setter functions returned from useState', () => {
+  const jsx = `
+    import React, { useState, Fragment } from 'react';
+
+    export default () => {
+      const [state1, setState1] = useState('gears of war 4');
+      const [state2, setState2] = useState(null);
+
+      function handleClick(e) {
+        setState2('hello');
+      }
+
+      return (
+        <Fragment>
+          <button onClick={handleClick}>set value</button>;
+          <button onClick={() => setState1('world')}>set value</button>;
+          <button onClick={setState1}>set value</button>;
+        </Fragment>
+      )
+    };
+  `;
+
+  const setterDeclaration = `
+    function setState1(value) {
+      state1 = value;
+    }
+  `;
+
+  const compiledCode = jsx2svelte.compile(jsx);
+  test('calls to setter should be replaced with assignment expression', () => {
+    expect(compiledCode).toContain("state2 = 'hello'");
+    expect(compiledCode).not.toContain("setState2('hello')");
+
+    expect(compiledCode).toContain("() => state1 = 'world'");
+    expect(compiledCode).not.toContain("() => setState1('world')");
+  });
+
+  test('a seperate function with the same name as the setter should be declared if references to it are found', () => {
+    expect(compiledCode.replace(/\s/g, '')).toContain(
+      setterDeclaration.replace(/\s/g, '')
+    );
   });
 });
