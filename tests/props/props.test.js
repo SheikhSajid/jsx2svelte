@@ -2,7 +2,7 @@ const jsx2svelte = require('../../refactor');
 
 describe('destructured props are compiled properly', () => {
   const jsx = `
-    import React, { useState } from 'react';
+    import React from 'react';
 
     export default ({ comment, date }) => {
       const title = \`Title: \$\{comment\}\`;
