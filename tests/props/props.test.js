@@ -1,7 +1,7 @@
 const jsx2svelte = require('../../refactor');
 
 describe('destructured props are compiled properly', () => {
-  const jsx = `
+  const jsx = /* jsx */ `
     import React from 'react';
 
     export default ({ comment, date }) => {
@@ -29,7 +29,7 @@ describe('destructured props are compiled properly', () => {
 });
 
 describe('no prop parameters', () => {
-  const jsx = `
+  const jsx = /* jsx */ `
     import React from 'react';
 
     export default () => {

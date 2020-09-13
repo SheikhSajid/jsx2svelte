@@ -1,7 +1,7 @@
 const jsx2svelte = require('../../refactor');
 
 describe('calls to useState hooks compiles properly', () => {
-  const jsx = `
+  const jsx = /* jsx */ `
     import React, { useState } from 'react';
 
     export default () => {
@@ -52,7 +52,7 @@ describe('calls to useState hooks compiles properly', () => {
 });
 
 describe('setter functions returned from useState', () => {
-  const jsx = `
+  const jsx = /* jsx */ `
     import React, { useState, Fragment } from 'react';
 
     export default () => {

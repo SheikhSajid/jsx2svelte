@@ -3,7 +3,7 @@ const utils = require('../utils');
 
 describe('calls to useEffect are compiled properly', () => {
   describe('empty array as second argument (onMount)', () => {
-    const jsx = `
+    const jsx = /* jsx */ `
       import React from 'react';
   
       export default ({ prop }) => {
@@ -26,7 +26,7 @@ describe('calls to useEffect are compiled properly', () => {
   });
 
   describe('non-empty array as second argument or no second argument (afterUpdate)', () => {
-    const jsx = `
+    const jsx = /* jsx */ `
       import React from 'react';
   
       export default ({ prop }) => {
@@ -60,7 +60,7 @@ describe('calls to useEffect are compiled properly', () => {
   });
 
   describe('useEffect callbacks with return values (onDestroy)', () => {
-    const jsx = `
+    const jsx = /* jsx */ `
       import React from 'react';
   
       export default ({ prop }) => {

@@ -1,7 +1,7 @@
 const jsx2svelte = require('../../refactor');
 
 describe('calls to useCallback are compiled properly', () => {
-  const jsx = `
+  const jsx = /* jsx */ `
     import React from 'react';
 
     export default ({ prop }) => {
