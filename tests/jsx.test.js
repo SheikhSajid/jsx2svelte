@@ -181,4 +181,23 @@ describe('jsx should be compiled properly', () => {
       );
     });
   });
+
+  describe('Fragment tag should be removed', () => {
+    const jsx = /* jsx */ `
+        import React from 'react';
+    
+        export default () => {
+          
+          return (
+            <Fragment>
+              <div>testing fragments</div>
+              <div>hello world</div>
+            </Fragment>
+          );
+        };
+      `;
+
+    const compiledCode = jsx2svelte.compile(jsx);
+    expect(compiledCode).not.toContain('Fragment');
+  });
 });
