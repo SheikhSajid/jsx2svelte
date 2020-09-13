@@ -46,20 +46,16 @@ describe('calls to useEffect are compiled properly', () => {
       expect(utils.removeWhiteSpace(compiledCode)).toContain(
         utils.removeWhiteSpace('afterUpdate(() => { doSomething(); })')
       );
-
-      expect(utils.removeWhiteSpace(compiledCode)).not.toContain(
-        utils.removeWhiteSpace('useEffect(() => { doSomething(); }, [prop])')
-      );
     });
 
     test.skip('no second argument', () => {
       expect(utils.removeWhiteSpace(compiledCode)).toContain(
         utils.removeWhiteSpace('afterUpdate(() => { doSomethingElse(); })')
       );
+    });
 
-      expect(utils.removeWhiteSpace(compiledCode)).not.toContain(
-        utils.removeWhiteSpace('useEffect(() => { doSomethingElse(); })')
-      );
+    test.skip('useEffect should be removed', () => {
+      expect(compiledCode).not.toContain('useEffect');
     });
   });
 
