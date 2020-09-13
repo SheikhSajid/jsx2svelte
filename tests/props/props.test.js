@@ -27,3 +27,17 @@ describe('destructured props are compiled properly', () => {
     expect(compiledCode).toContain("const randomVar = 'hello'");
   });
 });
+
+describe('no prop parameters', () => {
+  const jsx = `
+    import React from 'react';
+
+    export default () => {
+      const randomVar = 'hello';
+
+      return <div>no prop params</div>;
+    };
+  `;
+
+  expect(() => jsx2svelte.compile(jsx)).not.toThrow();
+});

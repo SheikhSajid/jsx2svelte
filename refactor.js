@@ -125,7 +125,7 @@ function compile(code) {
     let props = [];
 
     if (!hasProps) {
-      return null;
+      return props;
     }
 
     if (propsObject.type === 'ObjectPattern') {
