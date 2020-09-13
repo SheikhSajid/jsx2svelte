@@ -60,7 +60,8 @@ describe('calls to useEffect are compiled properly', () => {
   });
 
   describe('useEffect callbacks with return values (onDestroy)', () => {
-    const jsx = /* jsx */ `
+    describe('functional expression return values', () => {
+      const jsx = /* jsx */ `
       import React from 'react';
   
       export default ({ prop }) => {
@@ -77,53 +78,83 @@ describe('calls to useEffect are compiled properly', () => {
       };
     `;
 
-    const compiledCode = jsx2svelte.compile(jsx);
-    test('imports afterUpdate from svelte', () => {
-      expect(compiledCode).toContain(
-        'import { onDestroy, afterUpdate, onMount } from "svelte"'
-      );
+      const compiledCode = jsx2svelte.compile(jsx);
+      test('imports afterUpdate from svelte', () => {
+        expect(compiledCode).toContain(
+          'import { onDestroy, afterUpdate, onMount } from "svelte"'
+        );
+      });
+
+      const codeWithoutSpace = utils.removeWhiteSpace(compiledCode);
+      test('non-empty array, with return statement', () => {
+        expect(codeWithoutSpace).toContain(
+          utils.removeWhiteSpace('onDestroy(() => cleanup())')
+        );
+
+        expect(codeWithoutSpace).toContain(
+          utils.removeWhiteSpace('afterUpdate(() => { work(); })')
+        );
+      });
+
+      test('empty array, with return statement', () => {
+        expect(codeWithoutSpace).toContain(
+          utils.removeWhiteSpace('onDestroy(() => moreCleanup())')
+        );
+        expect(codeWithoutSpace).toContain(
+          utils.removeWhiteSpace('onMount(() => { mountWork(); })')
+        );
+      });
+
+      test('no array, no body', () => {
+        expect(codeWithoutSpace).toContain(
+          utils.removeWhiteSpace('onDestroy(() => extremelyClean())')
+        );
+      });
+
+      test.skip('lifecycle calls should not have no-op callbacks', () => {
+        expect(codeWithoutSpace).not.toContain(
+          utils.removeWhiteSpace('afterUpdate(() => {})')
+        );
+        expect(codeWithoutSpace).not.toContain(
+          utils.removeWhiteSpace('onDestroy(() => {})')
+        );
+        expect(codeWithoutSpace).not.toContain(
+          utils.removeWhiteSpace('onMount(() => {})')
+        );
+      });
+
+      test('the call to useEffect should be removed', () => {
+        expect(compiledCode).not.toContain('useEffect');
+      });
     });
 
-    const codeWithoutSpace = utils.removeWhiteSpace(compiledCode);
-    test('non-empty array, with return statement', () => {
-      expect(codeWithoutSpace).toContain(
-        utils.removeWhiteSpace('onDestroy(() => cleanup())')
-      );
+    describe('non-functional return values', () => {
+      const jsx = /* jsx */ `
+        import React from 'react';
+    
+        export default () => {
+          useEffect(() => 'non functional primitive val');
+          return <div>testing invalid callback return type</div>;
+        };
+      `;
 
-      expect(codeWithoutSpace).toContain(
-        utils.removeWhiteSpace('afterUpdate(() => { work(); })')
-      );
-    });
+      it('should throw', () => {
+        expect(() => jsx2svelte.compile(jsx)).toThrow();
+      });
 
-    test('empty array, with return statement', () => {
-      expect(codeWithoutSpace).toContain(
-        utils.removeWhiteSpace('onDestroy(() => moreCleanup())')
-      );
-      expect(codeWithoutSpace).toContain(
-        utils.removeWhiteSpace('onMount(() => { mountWork(); })')
-      );
-    });
+      const jsx2 = /* jsx */ `
+        import React from 'react';
+    
+        export default () => {
+          const func = () => cleanup();
+          useEffect(() => name);
+          return <div>testing non-functional return values</div>;
+        };
+      `;
 
-    test('no array, no body', () => {
-      expect(codeWithoutSpace).toContain(
-        utils.removeWhiteSpace('onDestroy(() => extremelyClean())')
-      );
-    });
-
-    test.skip('lifecycle calls should not have no-op callbacks', () => {
-      expect(codeWithoutSpace).not.toContain(
-        utils.removeWhiteSpace('afterUpdate(() => {})')
-      );
-      expect(codeWithoutSpace).not.toContain(
-        utils.removeWhiteSpace('onDestroy(() => {})')
-      );
-      expect(codeWithoutSpace).not.toContain(
-        utils.removeWhiteSpace('onMount(() => {})')
-      );
-    });
-
-    test('the call to useEffect should be removed', () => {
-      expect(compiledCode).not.toContain('useEffect');
+      it.skip('reference to function should not throw', () => {
+        expect(() => jsx2svelte.compile(jsx2)).not.toThrow();
+      });
     });
   });
 });
