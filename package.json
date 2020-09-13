@@ -7,7 +7,7 @@
     "example": "examples"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest"
   },
   "author": "Sk Sajidul Kadir",
   "license": "ISC",
@@ -15,7 +15,9 @@
     "@babel/generator": "^7.11.4",
     "@babel/parser": "^7.11.4",
     "@babel/traverse": "^7.11.0",
-    "@babel/types": "^7.11.0",
+    "@babel/types": "^7.11.0"
+  },
+  "devDependencies": {
     "jest": "^26.4.2"
   }
 }
