@@ -734,28 +734,24 @@ function compile(code) {
         const returnVal = getReturnVal(callExprPath.get('arguments.0'));
         if (returnVal) {
           // onDestroy
-          if (
-            returnVal.type !== 'FunctionExpression' &&
-            returnVal.type !== 'ArrowFunctionExpression'
-          ) {
+          if (t.isFunction(returnVal) || t.isIdentifier(returnVal)) {
+            namedImportsFromSvelte.onDestroy = true;
+            const onDestroyCall = t.callExpression(t.identifier('onDestroy'), [
+              returnVal.node,
+            ]);
+            callExprPath.insertAfter(onDestroyCall);
+            const pathToRemove = removeReturn(callExprPath.get('arguments.0'));
+            if (pathToRemove) {
+              pathToRemove.remove();
+            }
+
+            if (pathToRemove.node === callExprPath.node) {
+              return;
+            }
+          } else {
             throw Error(
               'Cleanup function must be returned as a function expression.'
             );
-          }
-
-          namedImportsFromSvelte.onDestroy = true;
-          const onDestroyCall = t.callExpression(t.identifier('onDestroy'), [
-            returnVal.node,
-          ]);
-          callExprPath.insertAfter(onDestroyCall);
-          const pathToRemove = removeReturn(callExprPath.get('arguments.0'));
-          const shouldReturn = pathToRemove.node === callExprPath.node;
-          if (pathToRemove) {
-            pathToRemove.remove();
-          }
-
-          if (shouldReturn) {
-            return;
           }
         }
 
