@@ -22,6 +22,8 @@ describe('calls to useEffect are compiled properly', () => {
       expect(utils.removeWhiteSpace(compiledCode)).toContain(
         utils.removeWhiteSpace('onMount(() => { doSomething(); })')
       );
+
+      expect(compiledCode).not.toContain(/useEffect\(.*\)/gi);
     });
   });
 
@@ -144,16 +146,38 @@ describe('calls to useEffect are compiled properly', () => {
 
       const jsx2 = /* jsx */ `
         import React from 'react';
+        const func = () => cleanup();
     
         export default () => {
-          const func = () => cleanup();
-          useEffect(() => name);
+          useEffect(() => func);
           return <div>testing non-functional return values</div>;
         };
       `;
 
-      it.skip('reference to function should not throw', () => {
+      it('reference to function should not throw', () => {
         expect(() => jsx2svelte.compile(jsx2)).not.toThrow();
+      });
+
+      const compiledCode = jsx2svelte.compile(jsx2);
+
+      it('replaces call to useEffect with onDestroy', () => {
+        expect(compiledCode).toContain('onDestroy(func)');
+        expect(compiledCode).not.toContain(/useEffect\(.*\)/gi);
+        expect(compiledCode).toContain(/cleanup\(\)/gi);
+      });
+
+      const jsx3 = /* jsx */ `
+        import React from 'react';
+        const val = 5;
+    
+        export default () => {
+          useEffect(() => val);
+          return <div>testing non-functional return values</div>;
+        };
+      `;
+
+      it('reference to primitive value should throw', () => {
+        expect(() => jsx2svelte.compile(jsx3)).toThrow();
       });
     });
   });
