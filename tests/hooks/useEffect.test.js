@@ -166,7 +166,7 @@ describe('calls to useEffect are compiled properly', () => {
       });
     });
 
-    describe('non-functional return values', () => {
+    describe.skip('non-functional return values', () => {
       const jsx = /* jsx */ `
         import React from 'react';
     
@@ -176,7 +176,7 @@ describe('calls to useEffect are compiled properly', () => {
         };
       `;
 
-      it('should throw', () => {
+      it('primitive value should throw', () => {
         expect(() => jsx2svelte.compile(jsx)).toThrow();
       });
 
