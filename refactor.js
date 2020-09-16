@@ -230,6 +230,33 @@ function compile(code) {
     return false;
   }
 
+  function getDeclarationNames(bodyNodePath) {
+    let decl = [];
+
+    bodyNodePath.traverse({
+      VariableDeclarator(declPath) {
+        decl.push({
+          name: declPath.node.id.name,
+          path: declPath.get('init'),
+        });
+      },
+      AssignmentExpression(asmntPath) {
+        decl.push({
+          name: asmntPath.node.left.name,
+          path: asmntPath.get('right'),
+        });
+      },
+      FunctionDeclaration(funcPath) {
+        decl.push({
+          name: funcPath.node.id.name,
+          path: funcPath,
+        });
+      },
+    });
+
+    return decl;
+  }
+
   // useEffect() helpers
   function isOnMount(argsPath) {
     const args = argsPath;
@@ -370,6 +397,8 @@ function compile(code) {
   };
   const setterFunctions = {};
   const builtSetterFunctions = [];
+  const excludedBodyPaths = [];
+  const variablesParsedSoFar = {};
 
   function processState(idPath, funcPath) {
     // TODO: detect aliases
@@ -514,6 +543,8 @@ function compile(code) {
           throw Error('Input file has to export a function that returns JSX');
           break;
       }
+
+      excludedBodyPaths.push(exportPath);
     },
     ImportDeclaration(importPath) {
       if (importPath.node.source.value === 'react') {
@@ -542,7 +573,7 @@ function compile(code) {
         ) {
           throw Error('Input file has to export a function that returns JSX');
         }
-
+        excludedBodyPaths.push(vdPath.parentPath);
         defaultExport.function = vdPath.get('init');
       },
       AssignmentExpression(asmntPath) {
@@ -559,14 +590,17 @@ function compile(code) {
         ) {
           throw Error('Input file has to export a function that returns JSX');
         }
-
+        excludedBodyPaths.push(asmntPath.parentPath);
         defaultExport.function = asmntPath.get('right');
       },
       FunctionDeclaration(funcPath) {
-        if (funcPath.node.id.name !== defaultExport.id.node.name) {
+        if (
+          funcPath.node.id.name !== defaultExport.id.node.name ||
+          funcPath.parentPath.type !== 'Program'
+        ) {
           return;
         }
-
+        excludedBodyPaths.push(funcPath);
         defaultExport.function = funcPath;
       },
     };
@@ -582,6 +616,42 @@ function compile(code) {
   // * add export statement for each prop
   propsNames.forEach((propName) => {
     scriptNodes.push(getExportNodeForProp(propName));
+  });
+
+  traverse(ast, {
+    Program(rootPath) {
+      const bodyLen = rootPath.get('body').length;
+      // const bodyArr = rootPath.get('body').node
+
+      for (let i = 0; i < bodyLen; i++) {
+        let bodyNodePath = rootPath.get('body.' + i);
+
+        if (
+          bodyNodePath.type === 'ImportDeclaration' ||
+          excludedBodyPaths.find((exclPath) => bodyNodePath === exclPath)
+        ) {
+          continue;
+        } else {
+          let declNames = getDeclarationNames(bodyNodePath);
+
+          if (declNames.length) {
+            // variablesOutsideComponent
+            declNames.forEach(
+              (dec) => (variablesParsedSoFar[dec.name] = dec.path)
+            );
+          }
+
+          if (bodyNodePath.type === 'ExportNamedDeclaration') {
+            if (!bodyNodePath.node.declaration) {
+              continue;
+            }
+
+            bodyNodePath = bodyNodePath.get('declaration');
+          }
+          scriptNodes.push(bodyNodePath.node);
+        }
+      }
+    },
   });
 
   const listMaps = [];
@@ -930,5 +1000,6 @@ function compile(code) {
 // fsp.readFile(path).catch(() => {
 //   fsp.writeFile(path, out, { encoding: 'utf8' });
 // });
+console.log(compile(code));
 
 module.exports = { compile };
