@@ -2,6 +2,42 @@ const jsx2svelte = require('../../refactor');
 const utils = require('../utils');
 
 describe('calls to useEffect are compiled properly', () => {
+  describe.skip('first argument is a reference to a function', () => {
+    const jsx = /* jsx */ `
+      import React from 'react';
+      const didMount = () => { doSomething(); }
+  
+      export default ({ prop }) => {
+        const didMount2 = () => { doSomething(); }
+        useEffect(didMount, []);
+        useEffect(didMount2, []);
+  
+        return <div>testing useEffect</div>;
+      };
+    `;
+
+    it('should not throw', () => {
+      expect(() => jsx2svelte.compile(jsx)).not.toThrow();
+    });
+
+    const compiledCode = jsx2svelte.compile(jsx);
+    it('should compiles properly', () => {
+      expect(utils.removeWhiteSpace(compiledCode)).toContain(
+        utils.removeWhiteSpace('const didMount = () => { doSomething(); }')
+      );
+      expect(utils.removeWhiteSpace(compiledCode)).toContain(
+        utils.removeWhiteSpace('onMount(didMount)')
+      );
+      expect(utils.removeWhiteSpace(compiledCode)).toContain(
+        utils.removeWhiteSpace('const didMount2 = () => { doSomething(); }')
+      );
+      expect(utils.removeWhiteSpace(compiledCode)).toContain(
+        utils.removeWhiteSpace('onMount(didMount2)')
+      );
+      expect(compiledCode).not.toContain(/useEffect\(.*\)/gi);
+    });
+  });
+
   describe('empty array as second argument (onMount)', () => {
     const jsx = /* jsx */ `
       import React from 'react';
