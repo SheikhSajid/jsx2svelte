@@ -4,6 +4,8 @@ jsx2svelte is a Compiler that compiles React JSX components to svelte components
 
 [Web Demo](https://sheikhsajid.github.io/react2svelte-visualizer/index.html)
 
+[Web Demo Repo](https://github.com/SheikhSajid/react2svelte-visualizer)
+
 ## Installation
 
 `npm i jsx2svelte --save`
