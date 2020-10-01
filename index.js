@@ -1003,15 +1003,4 @@ function compile(code) {
   return out;
 }
 
-// const path = `./out/out${Date.now()}.svelte`;
-
-// if (!fs.existsSync(`./out`)) fs.mkdirSync(`./out`);
-
-// const fsp = fs.promises;
-// fsp.readFile(path).catch(() => {
-//   fsp.writeFile(path, out, { encoding: 'utf8' });
-// });
-// console.log(compile(code));
-compile(code);
-
 module.exports = { compile };

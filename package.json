@@ -6,6 +6,10 @@
   "directories": {
     "example": "examples"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SheikhSajid/jsx2svelte.git"
+  },
   "scripts": {
     "test": "jest"
   },
