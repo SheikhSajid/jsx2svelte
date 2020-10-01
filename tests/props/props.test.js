@@ -1,4 +1,4 @@
-const jsx2svelte = require('../../refactor');
+const jsx2svelte = require('../../index');
 
 describe('destructured props are compiled properly', () => {
   const jsx = /* jsx */ `

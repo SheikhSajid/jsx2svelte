@@ -1,4 +1,4 @@
-const jsx2svelte = require('../../refactor');
+const jsx2svelte = require('../../index');
 
 describe('calls to useState hooks compiles properly', () => {
   const jsx = /* jsx */ `

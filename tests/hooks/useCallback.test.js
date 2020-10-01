@@ -1,4 +1,4 @@
-const jsx2svelte = require('../../refactor');
+const jsx2svelte = require('../../index');
 
 describe('calls to useCallback are compiled properly', () => {
   const jsx = /* jsx */ `

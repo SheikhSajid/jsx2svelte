@@ -1,4 +1,4 @@
-const jsx2svelte = require('../refactor');
+const jsx2svelte = require('../index');
 const utils = require('./utils');
 
 describe('code outside of the component should be included', () => {
