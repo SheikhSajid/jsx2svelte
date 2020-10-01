@@ -2,11 +2,6 @@ const parser = require('@babel/parser');
 const traverse = require('@babel/traverse').default;
 const generate = require('@babel/generator').default;
 const t = require('@babel/types');
-const fs = require('fs');
-
-const code = fs.readFileSync('./examples/simple/AstExplorerExample.jsx', {
-  encoding: 'utf8',
-});
 
 function compile(code) {
   const ast = parser.parse(code, { sourceType: 'module', plugins: ['jsx'] });
