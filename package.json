@@ -1,6 +1,6 @@
 {
   "name": "jsx2svelte",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Transpile JSX components to Svelte components",
   "main": "index.js",
   "directories": {
