@@ -86,13 +86,13 @@ describe('calls to useEffect are compiled properly', () => {
       );
     });
 
-    test.skip('no second argument', () => {
+    test('no second argument', () => {
       expect(utils.removeWhiteSpace(compiledCode)).toContain(
         utils.removeWhiteSpace('afterUpdate(() => { doSomethingElse(); })')
       );
     });
 
-    test.skip('useEffect should be removed', () => {
+    test('useEffect should be removed', () => {
       expect(compiledCode).not.toContain('useEffect');
     });
   });

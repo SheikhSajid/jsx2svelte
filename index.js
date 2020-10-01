@@ -299,6 +299,8 @@ function compile(code) {
         argsPath[1].node.elements.length > 0
       )
         return true;
+    } else if (argsPath.length === 1) {
+      return true;
     }
 
     return false;
