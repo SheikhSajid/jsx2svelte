@@ -43,7 +43,9 @@ function compile(code) {
 
   function getComponentBodyPath(path, componentFuncPath) {
     const bodyNodePath = path.findParent(
-      (currPath) => currPath.parentPath.parentPath === componentFuncPath
+      (currPath) =>
+        currPath.parentPath &&
+        currPath.parentPath.parentPath === componentFuncPath
     );
 
     return bodyNodePath;
@@ -618,6 +620,8 @@ function compile(code) {
     scriptNodes.push(getExportNodeForProp(propName));
   });
 
+  const listMaps = [];
+  const funcPath = defaultExport.function;
   traverse(ast, {
     Program(rootPath) {
       const bodyLen = rootPath.get('body').length;
@@ -650,56 +654,6 @@ function compile(code) {
           }
           scriptNodes.push(bodyNodePath.node);
         }
-      }
-    },
-  });
-
-  const listMaps = [];
-  const funcPath = defaultExport.function;
-
-  const namedImportsFromSvelte = {};
-
-  funcPath.get('body').traverse({
-    JSXAttribute(attrPath) {
-      // replace on<Event> attrs. E.g. onClick -> on:click
-      const attrName = attrPath.node.name.name;
-      const eventAttr = /^on([a-z]+)$/i.exec(attrName);
-
-      if (attrName === 'className') {
-        attrPath.get('name').replaceWith(t.jsxIdentifier('class'));
-        return;
-      }
-
-      if (eventAttr) {
-        const eventName = eventAttr[1];
-
-        const newAttrName = t.jsxNamespacedName(
-          t.jsxIdentifier('on'),
-          t.jsxIdentifier(eventName.toLowerCase())
-        );
-
-        attrPath.get('name').replaceWith(newAttrName);
-      }
-    },
-  });
-
-  funcPath.get('body').traverse({
-    // ! modifies the jsxVariables object
-    VariableDeclarator(declaratorPath) {
-      const varName = declaratorPath.node.id.name;
-      const val = declaratorPath.node.init;
-
-      if (val.type === 'JSXElement') {
-        jsxVariables[varName] = declaratorPath.get('init');
-      }
-    },
-    // ! modifies the jsxVariables object
-    AssignmentExpression(assignmentPath) {
-      const varName = assignmentPath.node.left.name;
-      const val = assignmentPath.node.right;
-
-      if (val.type === 'JSXElement') {
-        jsxVariables[varName] = assignmentPath.get('right');
       }
     },
     // ! throws if JSX is found inside a loop, conditional body or a function
@@ -735,13 +689,34 @@ function compile(code) {
         callExpr.node.callee.type === 'MemberExpression' &&
         callExpr.node.callee.property.name === 'map';
 
-      if (!funcIsInComponentBody && !funcIsCallbackPassedToListMap) {
+      if (
+        funcDecl &&
+        !funcIsInComponentBody &&
+        !funcIsCallbackPassedToListMap
+      ) {
         throw Error(
           'It seems like you have a JSX element inside function. This is not supported.'
         );
       }
     },
-    // ! replace call to `list.map` with <HTMLxBlock> JSX element
+    // ! modifies the jsxVariables object
+    VariableDeclarator(declaratorPath) {
+      const varName = declaratorPath.node.id.name;
+      const val = declaratorPath.node.init;
+
+      if (val && val.type === 'JSXElement') {
+        jsxVariables[varName] = declaratorPath.get('init');
+      }
+    },
+    // ! modifies the jsxVariables object
+    AssignmentExpression(assignmentPath) {
+      const varName = assignmentPath.node.left.name;
+      const val = assignmentPath.node.right;
+
+      if (val && val.type === 'JSXElement') {
+        jsxVariables[varName] = assignmentPath.get('right');
+      }
+    },
     CallExpression(callExprPath) {
       const callNode = callExprPath.node;
 
@@ -788,6 +763,39 @@ function compile(code) {
         listMaps.push({ objName, elementName, jsxElem, keyAttrPath });
         return;
       }
+    },
+  });
+
+  const namedImportsFromSvelte = {};
+
+  funcPath.get('body').traverse({
+    JSXAttribute(attrPath) {
+      // replace on<Event> attrs. E.g. onClick -> on:click
+      const attrName = attrPath.node.name.name;
+      const eventAttr = /^on([a-z]+)$/i.exec(attrName);
+
+      if (attrName === 'className') {
+        attrPath.get('name').replaceWith(t.jsxIdentifier('class'));
+        return;
+      }
+
+      if (eventAttr) {
+        const eventName = eventAttr[1];
+
+        const newAttrName = t.jsxNamespacedName(
+          t.jsxIdentifier('on'),
+          t.jsxIdentifier(eventName.toLowerCase())
+        );
+
+        attrPath.get('name').replaceWith(newAttrName);
+      }
+    },
+  });
+
+  funcPath.get('body').traverse({
+    // ! replace call to `list.map` with <HTMLxBlock> JSX element
+    CallExpression(callExprPath) {
+      const callNode = callExprPath.node;
 
       if (isCallToBuiltInHook(callExprPath, 'useEffect')) {
         const firstArg = callNode.arguments[0];
@@ -921,6 +929,7 @@ function compile(code) {
       const val = declaratorPath.node.init;
 
       if (
+        val &&
         val.type === 'JSXElement' &&
         val.openingElement.name.name === 'HTMLxBlock'
       ) {
@@ -932,6 +941,7 @@ function compile(code) {
       const val = assignmentPath.node.right;
 
       if (
+        val &&
         val.type === 'JSXElement' &&
         val.openingElement.name.name === 'HTMLxBlock'
       ) {
@@ -963,9 +973,10 @@ function compile(code) {
   }
 
   // ! modifies AST: remove all JSX assignments to variables
-  Object.values(jsxVariables).forEach((jsxVariable) =>
-    getComponentBodyPath(jsxVariable, funcPath).remove()
-  );
+  Object.values(jsxVariables).forEach((jsxVariable) => {
+    const bodyPath = getComponentBodyPath(jsxVariable, funcPath);
+    bodyPath && bodyPath.remove();
+  });
 
   scriptNodes = scriptNodes.concat(funcPath.node.body.body);
 
@@ -1000,6 +1011,7 @@ function compile(code) {
 // fsp.readFile(path).catch(() => {
 //   fsp.writeFile(path, out, { encoding: 'utf8' });
 // });
-console.log(compile(code));
+// console.log(compile(code));
+compile(code);
 
 module.exports = { compile };
