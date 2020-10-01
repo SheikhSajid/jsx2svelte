@@ -2,7 +2,7 @@ const jsx2svelte = require('../refactor');
 const utils = require('./utils');
 
 describe('jsx should be compiled properly', () => {
-  describe('variables with jsx values assigned to them', () => {
+  describe('variables with jsx values inside component body', () => {
     const jsx = /* jsx */ `
       import React from 'react';
   
@@ -29,8 +29,34 @@ describe('jsx should be compiled properly', () => {
     });
   });
 
+  describe('variables with jsx values outside component body', () => {
+    const jsx = /* jsx */ `
+      import React from 'react';
+      
+      const jsxVar = <div>Hello</div>
+      export default () => {
+        return (
+          <div>
+            {jsxVar}
+            <div>Hi again!</div>
+          </div>
+        );
+      };
+    `;
+
+    const compiledCode = jsx2svelte.compile(jsx);
+    test('variable should be removed', () => {
+      expect(compiledCode).not.toContain('jsxVar');
+    });
+
+    test('jsx value assigned to the variable should be inlined to the HTMLx code', () => {
+      expect(compiledCode).not.toContain('{jsxVar}');
+      expect(compiledCode).toContain('<div>Hello</div>');
+    });
+  });
+
   describe('jsx value assignments inside conditional/loops should throw', () => {
-    describe('inside if statement', () => {
+    describe('jsx inside if statement', () => {
       const jsx = /* jsx */ `
         import React from 'react';
     
@@ -51,12 +77,36 @@ describe('jsx should be compiled properly', () => {
         };
       `;
 
-      it('should throw', () => {
+      test('if statement inside component function throws', () => {
         expect(() => jsx2svelte.compile(jsx)).toThrow();
+      });
+
+      const jsx2 = /* jsx */ `
+        import React from 'react';
+
+        if (age > maxAge) {
+          allowed = <h3>NOT ALLOWED</h3>;
+        } else {
+          allowed = <h3>ALLOWED</h3>;
+        }
+    
+        export default ({ age, maxAge }) => {
+          let allowed;
+
+          return (
+            <div>
+              {allowed}
+            </div>
+          );
+        };
+      `;
+
+      it('if statement outside component function throws', () => {
+        expect(() => jsx2svelte.compile(jsx2)).toThrow();
       });
     });
 
-    describe('inside loop', () => {
+    describe('jsx inside loop', () => {
       const jsx = /* jsx */ `
         import React from 'react';
     
@@ -77,8 +127,33 @@ describe('jsx should be compiled properly', () => {
         };
       `;
 
-      it('should throw', () => {
+      it('loop inside component function throws', () => {
         expect(() => jsx2svelte.compile(jsx)).toThrow();
+      });
+
+      const jsx2 = /* jsx */ `
+        import React from 'react';
+    
+        for (let i = 0; i <= 100; i++) {
+          // throws
+          jsxElements.push(<div>{i}</div>);
+        }
+        
+        export default () => {
+          let jsxElements = [];
+          
+
+  
+          return (
+            <div>
+              {jsxElements}
+            </div>
+          );
+        };
+      `;
+
+      it('loop outside component function throws', () => {
+        expect(() => jsx2svelte.compile(jsx2)).toThrow();
       });
     });
   });
