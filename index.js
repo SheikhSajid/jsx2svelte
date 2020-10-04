@@ -115,6 +115,7 @@ function compile(code) {
     return namedExport;
   }
 
+  // !replaces identifier param with '$$props'
   function getPropNames(funcPath) {
     const params = funcPath.node.params;
     const hasProps = !!params.length;
@@ -127,6 +128,29 @@ function compile(code) {
 
     if (propsObject.type === 'ObjectPattern') {
       props = propsObject.properties.map((objProp) => objProp.value.name);
+    } else if (propsObject.type === 'Identifier') {
+      props = ['$$props'];
+      propsContainerObjName = propsObject.name;
+
+      funcPath.get('body').traverse({
+        Identifier(idPath) {
+          if (idPath.node.name === propsContainerObjName) {
+            idPath.replaceWith(t.identifier('$$props'));
+          }
+        },
+        VariableDeclarator(declPath) {
+          if (
+            declPath.node.init.name !== propsContainerObjName ||
+            declPath.node.id.type !== 'ObjectPattern'
+          ) {
+            return;
+          }
+
+          props = props.concat(
+            declPath.node.id.properties.map((objProp) => objProp.value.name)
+          );
+        },
+      });
     }
 
     return props;
@@ -359,8 +383,8 @@ function compile(code) {
 
   // * processing functions
   const compiledStateBodyNodePaths = [];
-  function processProps(idPath, funcPath) {
-    const propsNames = getPropNames(funcPath);
+  function processProps(idPath, funcPath, propsNames) {
+    // const propsNames = getPropNames(funcPath);
 
     const identifierName = idPath.node.name;
     // console.log('id: ' + identifierName);
@@ -614,7 +638,8 @@ function compile(code) {
 
   // * add export statement for each prop
   propsNames.forEach((propName) => {
-    scriptNodes.push(getExportNodeForProp(propName));
+    if (!propName.startsWith('$$'))
+      scriptNodes.push(getExportNodeForProp(propName));
   });
 
   const listMaps = [];
@@ -860,7 +885,7 @@ function compile(code) {
     },
     // ! props and state processing, JSX variable inlining
     Identifier(idPath) {
-      const propsProcessed = processProps(idPath, funcPath); // ! Side Effect: modifies AST
+      const propsProcessed = processProps(idPath, funcPath, propsNames); // ! Side Effect: modifies AST
       if (propsProcessed) return;
 
       // ! modifies AST: replace `useState` call with declarations
