@@ -39,7 +39,7 @@ function compile(code) {
   function getComponentBodyPath(path, componentFuncPath) {
     const bodyNodePath = path.findParent(
       (currPath) =>
-        currPath.parentPath &&
+        currPath.parentKey === 'body' &&
         currPath.parentPath.parentPath === componentFuncPath
     );
 
