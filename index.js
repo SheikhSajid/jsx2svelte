@@ -468,7 +468,7 @@ function compile(code) {
 
       callExprPath.replaceWith(asnExpr); // ! replace the function call
       const hasLabeledParent = callExprPath.findParent(t.isLabeledStatement);
-      const isInsideFuncDecl = callExprPath.findParent(t.isFunctionDeclaration);
+      const isInsideFuncDecl = callExprPath.findParent(t.isFunction);
 
       // ? function declarations
       // ? return statement
