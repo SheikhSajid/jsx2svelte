@@ -892,6 +892,25 @@ function compile(code) {
         callExprPath.replaceWith(firstArg);
         return;
       }
+
+      if (isCallToBuiltInHook(callExprPath, 'useMemo')) {
+        const firstArg = callNode.arguments[0];
+        if (
+          firstArg.type !== 'FunctionExpression' &&
+          firstArg.type !== 'ArrowFunctionExpression'
+        ) {
+          throw Error(
+            'The first argument passed to useMemo must be a function expression, not a reference to a function.'
+          );
+        }
+
+        const returnVal = getReturnVal(callExprPath.get('arguments.0'));
+        if (returnVal) {
+          // onDestroy
+          callExprPath.replaceWith(returnVal);
+          return;
+        }
+      }
     },
     // ! props and state processing, JSX variable inlining
     Identifier(idPath) {
