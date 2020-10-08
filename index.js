@@ -485,15 +485,13 @@ function compile(code) {
       }
     }
 
-    if (
-      idPath.node.name === useState &&
-      idPath.container.type === 'CallExpression'
-    ) {
+    let callExpr = idPath.findParent(t.isCallExpression);
+    if (callExpr && isCallToBuiltInHook(callExpr, 'useState')) {
       const {
         vDeclaration,
         stateVariableName,
         setterFunctionName,
-      } = getDeclarationForUseState(idPath);
+      } = getDeclarationForUseState(callExpr);
 
       if (vDeclaration) {
         const bodyNode = getComponentBodyPath(idPath, funcPath);
