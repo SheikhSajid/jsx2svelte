@@ -302,15 +302,17 @@ function compile(code) {
 
   function getReturnVal(callBackPath) {
     let retVal = null;
-    callBackPath.traverse({
+
+    if (callBackPath.get('body').type !== 'BlockStatement') {
+      retVal = callBackPath.get('body');
+      return retVal;
+    }
+
+    callBackPath.get('body').traverse({
       ReturnStatement(retPath) {
         retVal = retPath.get('argument');
       },
     });
-
-    if (!retVal && callBackPath.get('body').type !== 'BlockStatement') {
-      retVal = callBackPath.get('body');
-    }
 
     return retVal;
   }
