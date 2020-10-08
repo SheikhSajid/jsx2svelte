@@ -542,6 +542,17 @@ function compile(code) {
 
   const defaultExport = {};
 
+  traverse(ast, {
+    CallExpression(callExprPath) {
+      if (isCallToBuiltInHook(callExprPath, 'memo')) {
+        const firstArg = callExprPath.get('arguments.0');
+
+        callExprPath.replaceWith(firstArg);
+        return;
+      }
+    },
+  });
+
   const exportDetectionPlugin = {
     ExportDefaultDeclaration(exportPath) {
       switch (exportPath.node.declaration.type) {
