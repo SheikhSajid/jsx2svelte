@@ -156,8 +156,7 @@ function compile(code) {
     return props;
   }
 
-  function getDeclarationForUseState(idPath) {
-    const callExprPath = idPath.parentPath;
+  function getDeclarationForUseState(callExprPath) {
     const lVal = callExprPath.container.id;
     let vDeclaration = null;
     let setterFunctionName = null;
@@ -243,7 +242,7 @@ function compile(code) {
     } else if (
       callee.type === 'MemberExpression' &&
       callee.object.name === 'React' &&
-      callee.object.property === hookName
+      callee.property.name === hookName
     ) {
       return true;
     }
