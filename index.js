@@ -188,10 +188,20 @@ function compile(code) {
       return out;
     }
 
+    const firstArgPath = callExprPath.get('arguments.0');
+    let rhs = null;
+    const stateId = t.identifier(stateVariableName)
+
+    if (t.isFunction(firstArgPath)) {
+      rhs = t.callExpression(firstArgPath.node, [stateId])
+    } else {
+      rhs = firstArgPath.node
+    }
+    console.log('rhs: ' + generate(rhs).code)
     const asnExpr = t.assignmentExpression(
       '=',
-      t.identifier(stateVariableName),
-      callExprPath.node.arguments[0]
+      stateId,
+      rhs
     );
     // callExpr.replaceWith(asnExpr);
 
