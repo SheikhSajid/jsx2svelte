@@ -190,19 +190,14 @@ function compile(code) {
 
     const firstArgPath = callExprPath.get('arguments.0');
     let rhs = null;
-    const stateId = t.identifier(stateVariableName)
+    const stateId = t.identifier(stateVariableName);
 
     if (t.isFunction(firstArgPath)) {
-      rhs = t.callExpression(firstArgPath.node, [stateId])
+      rhs = t.callExpression(firstArgPath.node, [stateId]);
     } else {
-      rhs = firstArgPath.node
+      rhs = firstArgPath.node;
     }
-    console.log('rhs: ' + generate(rhs).code)
-    const asnExpr = t.assignmentExpression(
-      '=',
-      stateId,
-      rhs
-    );
+    const asnExpr = t.assignmentExpression('=', stateId, rhs);
     // callExpr.replaceWith(asnExpr);
 
     return { callExprPath, asnExpr };
@@ -525,9 +520,10 @@ function compile(code) {
   const jsxVariables = {};
   function processJSXVariable(idPath) {
     const isRefToJSXVar = jsxVariables[idPath.node.name];
-    const isBeingReturned = idPath.container.type === 'ReturnStatement';
+    const isBeingReturned =
+      idPath.container && idPath.container.type === 'ReturnStatement';
     const isRefedInJSXExpression =
-      idPath.container.type === 'JSXExpressionContainer';
+      idPath.container && idPath.container.type === 'JSXExpressionContainer';
 
     if (!isRefToJSXVar || (!isBeingReturned && !isRefedInJSXExpression)) {
       // * noop
@@ -759,53 +755,6 @@ function compile(code) {
         jsxVariables[varName] = assignmentPath.get('right');
       }
     },
-    CallExpression(callExprPath) {
-      const callNode = callExprPath.node;
-
-      if (
-        callNode.callee.type === 'MemberExpression' &&
-        callNode.callee.property.name === 'map'
-      ) {
-        const callback = callNode.arguments[0];
-        const objName = callNode.callee.object.name;
-        const elementName = callback.params[0].name;
-        let keyAttrPath;
-        let jsxElem = {};
-
-        if (callback.body.type === 'JSXElement') {
-          jsxElem = callback.body;
-        } else if (
-          callback.body.type === 'BlockStatement' &&
-          callback.body.body[0].type === 'ReturnStatement' &&
-          callback.body.body[0].argument.type === 'JSXElement'
-        ) {
-          jsxElem = callback.body.body[0].argument;
-        } else {
-          return;
-        }
-
-        keyAttrPath = getKeyAttrPath(callExprPath);
-        const keyCode = generate(keyAttrPath.node.value.expression, {}).code;
-        keyAttrPath.remove();
-        const loopCodeString = getListMapCode({
-          objName,
-          elementName,
-          jsxElem,
-          key: keyCode,
-        });
-        const loopJSXElem = buildHtmlxNode(loopCodeString); // HTMLxBlock
-        // console.log(generate(loopJSXElem).code);
-        const jsxExpr = callExprPath.findParent(t.isJSXExpressionContainer);
-        if (jsxExpr) {
-          jsxExpr.replaceWith(loopJSXElem);
-        } else {
-          callExprPath.replaceWith(loopJSXElem);
-        }
-
-        listMaps.push({ objName, elementName, jsxElem, keyAttrPath });
-        return;
-      }
-    },
   });
 
   const namedImportsFromSvelte = {};
@@ -921,6 +870,11 @@ function compile(code) {
           return;
         }
       }
+
+      if (isCallToBuiltInHook(callExprPath, 'useReducer')) {
+        throw Error('useReducer not suppported yet');
+        return;
+      }
     },
     // ! props and state processing, JSX variable inlining
     Identifier(idPath) {
@@ -1011,6 +965,56 @@ function compile(code) {
     },
     Identifier(idPath) {
       processJSXVariable(idPath, funcPath);
+    },
+  });
+
+  traverse(ast, {
+    CallExpression(callExprPath) {
+      const callNode = callExprPath.node;
+
+      if (
+        callNode.callee.type === 'MemberExpression' &&
+        callNode.callee.property.name === 'map'
+      ) {
+        const callback = callNode.arguments[0];
+        const objName = callNode.callee.object.name;
+        const elementName = callback.params[0].name;
+        let keyAttrPath;
+        let jsxElem = {};
+
+        if (callback.body.type === 'JSXElement') {
+          jsxElem = callback.body;
+        } else if (
+          callback.body.type === 'BlockStatement' &&
+          callback.body.body[0].type === 'ReturnStatement' &&
+          callback.body.body[0].argument.type === 'JSXElement'
+        ) {
+          jsxElem = callback.body.body[0].argument;
+        } else {
+          return;
+        }
+
+        keyAttrPath = getKeyAttrPath(callExprPath);
+        const keyCode = generate(keyAttrPath.node.value.expression, {}).code;
+        keyAttrPath.remove();
+        const loopCodeString = getListMapCode({
+          objName,
+          elementName,
+          jsxElem,
+          key: keyCode,
+        });
+        const loopJSXElem = buildHtmlxNode(loopCodeString); // HTMLxBlock
+        // console.log(generate(loopJSXElem).code);
+        const jsxExpr = callExprPath.findParent(t.isJSXExpressionContainer);
+        if (jsxExpr) {
+          jsxExpr.replaceWith(loopJSXElem);
+        } else {
+          callExprPath.replaceWith(loopJSXElem);
+        }
+
+        listMaps.push({ objName, elementName, jsxElem, keyAttrPath });
+        return;
+      }
     },
   });
 
