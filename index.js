@@ -1064,6 +1064,7 @@ function compile(code) {
   out = out.replace(/\\n/g, '\n');
   out = out.replace(/\\r/g, '\r');
   out = out.replace(/<\/?Fragment>/g, '');
+  out = out.replace(/\\"/g, '"');
 
   return out;
 }
