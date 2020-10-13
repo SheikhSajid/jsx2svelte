@@ -3,6 +3,8 @@ const traverse = require('@babel/traverse').default;
 const generate = require('@babel/generator').default;
 const t = require('@babel/types');
 
+const codeFrameColumns = require('@babel/code-frame').codeFrameColumns;
+
 function compile(code) {
   const ast = parser.parse(code, { sourceType: 'module', plugins: ['jsx'] });
   // * helper functions
@@ -34,6 +36,17 @@ function compile(code) {
     }
 
     return true;
+  }
+
+  function getErrorCodeFrame(path, message) {
+    const expMsg = codeFrameColumns(
+      code,
+      path.node.loc,
+      // { start: path.node.loc.start },
+      { message }
+    );
+
+    return expMsg;
   }
 
   function getComponentBodyPath(path, componentFuncPath) {
@@ -574,12 +587,20 @@ function compile(code) {
             exportPath.node.declaration.right.type !== 'FunctionDeclaration' &&
             exportPath.node.declaration.right.type !== 'ArrowFunctionExpression'
           ) {
-            throw Error('Input file has to export a function that returns JSX');
+            const expMsg = getErrorCodeFrame(
+              exportPath,
+              'Input file has to export a function that returns JSX'
+            );
+            throw Error(expMsg);
           }
           defaultExport.function = exportPath.get('declaration.right');
           break;
         default:
-          throw Error('Input file has to export a function that returns JSX');
+          const expMsg = getErrorCodeFrame(
+            exportPath,
+            'Input file has to export a function that returns JSX'
+          );
+          throw Error(expMsg);
           break;
       }
 
@@ -610,7 +631,11 @@ function compile(code) {
           vdPath.node.init.type !== 'FunctionExpression' &&
           vdPath.node.init.type !== 'ArrowFunctionExpression'
         ) {
-          throw Error('Input file has to export a function that returns JSX');
+          const expMsg = getErrorCodeFrame(
+            defaultExport,
+            'Input file has to export a function that returns JSX'
+          );
+          throw Error(expMsg);
         }
         excludedBodyPaths.push(vdPath.parentPath);
         defaultExport.function = vdPath.get('init');
@@ -627,7 +652,11 @@ function compile(code) {
           asmntPath.node.right.type !== 'FunctionExpression' &&
           asmntPath.node.right.type !== 'ArrowFunctionExpression'
         ) {
-          throw Error('Input file has to export a function that returns JSX');
+          const expMsg = getErrorCodeFrame(
+            defaultExport,
+            'Input file has to export a function that returns JSX'
+          );
+          throw Error(expMsg);
         }
         excludedBodyPaths.push(asmntPath.parentPath);
         defaultExport.function = asmntPath.get('right');
@@ -705,7 +734,11 @@ function compile(code) {
       });
 
       if (isInLoop) {
-        throw Error('JSX inside loops cannot be compiled');
+        const msg = getErrorCodeFrame(
+          jsxPath,
+          'JSX inside loops cannot be compiled'
+        );
+        throw Error(msg);
       }
 
       // ! throw if inside conditional
@@ -714,7 +747,11 @@ function compile(code) {
         isInConditional &&
         isInConditional.container.type === 'JSXExpressionContainer';
       if (isInConditional && !isInJSXExpression) {
-        throw Error('JSX inside conditionals cannot be compiled');
+        const errMsg = getErrorCodeFrame(
+          jsxPath,
+          'JSX inside conditionals cannot be compiled'
+        );
+        throw Error(errMsg);
       }
 
       // ! throw if inside a function
@@ -732,9 +769,11 @@ function compile(code) {
         !funcIsInComponentBody &&
         !funcIsCallbackPassedToListMap
       ) {
-        throw Error(
-          'It seems like you have a JSX element inside function. This is not supported.'
+        const errMsg = getErrorCodeFrame(
+          jsxPath,
+          'It seems like you have a JSX element inside a function that is not the exported function. This cannot be compiled.'
         );
+        throw Error(errMsg);
       }
     },
     // ! modifies the jsxVariables object
@@ -794,9 +833,11 @@ function compile(code) {
           firstArg.type !== 'FunctionExpression' &&
           firstArg.type !== 'ArrowFunctionExpression'
         ) {
-          throw Error(
+          const msg = getErrorCodeFrame(
+            callExprPath,
             'The first argument passed to useEffect must be a function expression.'
           );
+          throw Error(msg);
         }
 
         // cleanup
@@ -818,9 +859,11 @@ function compile(code) {
               return;
             }
           } else {
-            throw Error(
+            const msg = getErrorCodeFrame(
+              callExprPath,
               'Cleanup function must be returned as a function expression.'
             );
+            throw Error(msg);
           }
         }
 
@@ -858,9 +901,11 @@ function compile(code) {
           firstArg.type !== 'FunctionExpression' &&
           firstArg.type !== 'ArrowFunctionExpression'
         ) {
-          throw Error(
+          const msg = getErrorCodeFrame(
+            callExprPath,
             'The first argument passed to useMemo must be a function expression, not a reference to a function.'
           );
+          throw Error(msg);
         }
 
         const returnVal = getReturnVal(callExprPath.get('arguments.0'));
@@ -872,8 +917,11 @@ function compile(code) {
       }
 
       if (isCallToBuiltInHook(callExprPath, 'useReducer')) {
-        throw Error('useReducer not suppported yet');
-        return;
+        const msg = getErrorCodeFrame(
+          callExprPath,
+          'useReducer not suppported yet'
+        );
+        throw Error(msg);
       }
     },
     // ! props and state processing, JSX variable inlining
