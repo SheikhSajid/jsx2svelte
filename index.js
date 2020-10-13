@@ -535,8 +535,9 @@ function compile(code) {
     const isRefToJSXVar = jsxVariables[idPath.node.name];
     const isBeingReturned =
       idPath.container && idPath.container.type === 'ReturnStatement';
-    const isRefedInJSXExpression =
-      idPath.container && idPath.container.type === 'JSXExpressionContainer';
+    const isRefedInJSXExpression = idPath.findParent(
+      t.isJSXExpressionContainer
+    );
 
     if (!isRefToJSXVar || (!isBeingReturned && !isRefedInJSXExpression)) {
       // * noop
@@ -549,7 +550,12 @@ function compile(code) {
       // * keep the return statement, just dereference the identifier
       idPath.replaceWith(jsxVariables[idPath.node.name].node);
     } else {
-      idPath.parentPath.replaceWith(jsxVariables[idPath.node.name].node);
+      const toBeReplaced =
+        idPath.findParent(t.isObjectExpression) || isRefedInJSXExpression;
+
+      if (toBeReplaced) {
+        toBeReplaced.replaceWith(jsxVariables[idPath.node.name]);
+      }
     }
   }
 
@@ -938,52 +944,6 @@ function compile(code) {
       let jsxRemoved = processJSXVariable(idPath, funcPath);
       if (jsxRemoved) return;
     },
-    LogicalExpression(condPath) {
-      // inline conditional expression {condition && <JSXElement />}
-      if (condPath.get('right').type === 'JSXElement') {
-        const jsx = generate(condPath.get('right').node, { comments: false })
-          .code;
-
-        // condPath.get('right').remove();
-        const condition = generate(condPath.get('left').node, {
-          comments: false,
-        }).code;
-
-        const svelteIfStatementCode =
-          '{#if ' + condition + '}\n' + jsx + '\n' + '{/if}';
-
-        const htmlxBlock = buildHtmlxNode(svelteIfStatementCode);
-
-        const container = condPath.findParent(t.isJSXExpressionContainer);
-        container.replaceWith(htmlxBlock);
-      }
-    },
-    ConditionalExpression(condPath) {
-      if (
-        condPath.get('consequent').type === 'JSXElement' &&
-        condPath.get('alternate').type === 'JSXElement'
-      ) {
-        const testCode = generate(condPath.get('test').node, {}).code;
-        const consequentCode = generate(condPath.get('consequent').node, {})
-          .code;
-        const alternateCode = generate(condPath.get('alternate').node, {}).code;
-
-        const svelteIfElseStatementCode =
-          '{#if ' +
-          testCode +
-          '}\n' +
-          consequentCode +
-          '\n' +
-          '{:else}\n' +
-          alternateCode +
-          '\n{/if}\n';
-        const htmlxBlock = buildHtmlxNode(svelteIfElseStatementCode);
-        const jsxExprContainer = condPath.findParent(
-          t.isJSXExpressionContainer
-        );
-        jsxExprContainer.replaceWith(htmlxBlock);
-      }
-    },
   });
 
   funcPath.get('body').traverse({
@@ -1062,6 +1022,49 @@ function compile(code) {
 
         listMaps.push({ objName, elementName, jsxElem, keyAttrPath });
         return;
+      }
+    },
+    LogicalExpression(condPath) {
+      // inline conditional expression {condition && <JSXElement />}
+      const jsxContainer = condPath.findParent(t.isJSXExpressionContainer);
+      if (jsxContainer) {
+        const jsx = generate(condPath.get('right').node, { comments: false })
+          .code;
+
+        // condPath.get('right').remove();
+        const condition = generate(condPath.get('left').node, {
+          comments: false,
+        }).code;
+
+        const svelteIfStatementCode =
+          '{#if ' + condition + '}\n' + jsx + '\n' + '{/if}';
+
+        const htmlxBlock = buildHtmlxNode(svelteIfStatementCode);
+
+        jsxContainer.replaceWith(htmlxBlock);
+      }
+    },
+    ConditionalExpression(condPath) {
+      if (condPath.findParent(t.isJSXExpressionContainer)) {
+        const testCode = generate(condPath.get('test').node, {}).code;
+        const consequentCode = generate(condPath.get('consequent').node, {})
+          .code;
+        const alternateCode = generate(condPath.get('alternate').node, {}).code;
+
+        const svelteIfElseStatementCode =
+          '{#if ' +
+          testCode +
+          '}\n' +
+          consequentCode +
+          '\n' +
+          '{:else}\n' +
+          alternateCode +
+          '\n{/if}\n';
+        const htmlxBlock = buildHtmlxNode(svelteIfElseStatementCode);
+        const jsxExprContainer = condPath.findParent(
+          t.isJSXExpressionContainer
+        );
+        jsxExprContainer.replaceWith(htmlxBlock);
       }
     },
   });
