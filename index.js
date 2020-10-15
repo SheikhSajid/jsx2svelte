@@ -456,6 +456,14 @@ function compile(code) {
         return false;
       }
 
+      const isInDeclarator = idPath.findParent(t.isVariableDeclarator);
+      if (isInDeclarator) {
+        stateVariables[isInDeclarator.get('id.name').node] = {
+          setterFunctionName: null,
+          decNode: parentDec,
+        };
+      }
+
       const {
         parentToBeReplaced,
         reactiveLabel,
