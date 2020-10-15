@@ -549,12 +549,23 @@ function compile(code) {
     if (isBeingReturned) {
       // * keep the return statement, just dereference the identifier
       idPath.replaceWith(jsxVariables[idPath.node.name].node);
+      return true;
     } else {
-      const toBeReplaced =
-        idPath.findParent(t.isObjectExpression) || isRefedInJSXExpression;
+      const isInObjExp = idPath.findParent(t.isObjectExpression);
+      const isInConditional = idPath.findParent(t.isConditional);
+      const isInLogical = idPath.findParent(t.isLogicalExpression);
+      const toBeReplaced = isInObjExp || isRefedInJSXExpression;
+
+      // workaround for unexpected traversal behavior in babel.
+      // removed identifier inside jsx conditional is being
+      // re-visited for some reason
+      if (!isInObjExp && (isInConditional || isInLogical)) {
+        return false;
+      }
 
       if (toBeReplaced) {
         toBeReplaced.replaceWith(jsxVariables[idPath.node.name]);
+        return true;
       }
     }
   }
@@ -941,8 +952,8 @@ function compile(code) {
       if (useStateReplaced) return;
 
       // ! modifies AST: replace references to variables with JSX values with inline JSX
-      let jsxRemoved = processJSXVariable(idPath, funcPath);
-      if (jsxRemoved) return;
+      // let jsxRemoved = processJSXVariable(idPath, funcPath);
+      // if (jsxRemoved) return;
     },
   });
 
