@@ -592,30 +592,8 @@ function compile(code) {
       return false;
     }
 
-    const name = idPath.node.name;
-
-    if (isBeingReturned) {
-      // * keep the return statement, just dereference the identifier
-      idPath.replaceWith(jsxVariables[idPath.node.name].node);
-      return true;
-    } else {
-      const isInObjExp = idPath.findParent(t.isObjectExpression);
-      const isInConditional = idPath.findParent(t.isConditional);
-      const isInLogical = idPath.findParent(t.isLogicalExpression);
-      const toBeReplaced = isInObjExp || isRefedInJSXExpression;
-
-      // workaround for unexpected traversal behavior in babel.
-      // removed identifier inside jsx conditional is being
-      // re-visited for some reason
-      if (!isInObjExp && (isInConditional || isInLogical)) {
-        return false;
-      }
-
-      if (toBeReplaced) {
-        toBeReplaced.replaceWith(jsxVariables[idPath.node.name]);
-        return true;
-      }
-    }
+    idPath.replaceWith(jsxVariables[idPath.node.name]);
+    return true;
   }
 
   // * main

@@ -166,11 +166,16 @@ describe('jsx should be compiled properly', () => {
         export default ({ age }) => {
           let name = 'Marcus Fenix';
           let son = 'JD Fenix';
+
+          const msgTag = <p>Older than 5</p>
+          const msgTag2 = <p>Younger than 5</p>
   
           return (
             <div>
               {(age > 50) ? <h1>{name}</h1> : <h1>{son}</h1>}
               {(age < 30) && <h1>{son}</h1>}
+              
+              {(age > 5) ? msgTag : msgTag2}
             </div>
           );
         };
@@ -193,9 +198,25 @@ describe('jsx should be compiled properly', () => {
           `)
         );
 
+        expect(utils.removeWhiteSpace(compiledCode)).toContain(
+          utils.removeWhiteSpace(`
+            {#if age > 5}
+              <p>Older than 5</p>
+            {:else}
+              <p>Younger than 5</p>
+            {/if}
+          `)
+        );
+
         expect(utils.removeWhiteSpace(compiledCode)).not.toContain(
           utils.removeWhiteSpace(`
             (age > 50) ? <h1>{name}</h1> : <h1>{son}</h1>
+          `)
+        );
+
+        expect(utils.removeWhiteSpace(compiledCode)).not.toContain(
+          utils.removeWhiteSpace(`
+            (age > 5) ? msgTag : msgTag2
           `)
         );
       });
