@@ -59,6 +59,26 @@ function compile(code) {
     return bodyNodePath;
   }
 
+  function getVariablesNames(path) {
+    const out = [];
+    if (path.type === 'VariableDeclarator') {
+      if (path.get('id').type === 'ObjectPattern') {
+        const propertiesPath = path.get('id.properties');
+        const len = propertiesPath.length;
+
+        for (let i = 0; i < len; i++) {
+          out.push(propertiesPath[i].get(`key.name`).node);
+        }
+      } else {
+        out.push(path.get('id.name').node);
+      }
+    } else if (path.type === 'AssignmentExpression') {
+      out.push(path.get('left.name').node);
+    }
+
+    return out;
+  }
+
   function getReactiveNodeForIdentifier(
     identifierPath,
     componentFuncPath,
@@ -421,6 +441,20 @@ function compile(code) {
       );
 
       if (parentToBeReplaced) {
+        const isInDeclarator = idPath.findParent(t.isVariableDeclarator);
+        const isInAssngmt = idPath.findParent(t.isAssignmentExpression);
+
+        if (isInDeclarator || isInAssngmt) {
+          const varNames = getVariablesNames(isInDeclarator || isInAssngmt);
+
+          varNames.forEach((varName) => {
+            stateVariables[varName] = {
+              setterFunctionName: null,
+              decNode: null,
+            };
+          });
+        }
+
         if (reactiveLabel) parentToBeReplaced.replaceWith(reactiveLabel);
         else {
           parentToBeReplaced.remove();
@@ -457,11 +491,17 @@ function compile(code) {
       }
 
       const isInDeclarator = idPath.findParent(t.isVariableDeclarator);
-      if (isInDeclarator) {
-        stateVariables[isInDeclarator.get('id.name').node] = {
-          setterFunctionName: null,
-          decNode: parentDec,
-        };
+      const isInAssngmt = idPath.findParent(t.isAssignmentExpression);
+
+      if (isInDeclarator || isInAssngmt) {
+        const varNames = getVariablesNames(isInDeclarator || isInAssngmt);
+
+        varNames.forEach((varName) => {
+          stateVariables[varName] = {
+            setterFunctionName: null,
+            decNode: null,
+          };
+        });
       }
 
       const {
