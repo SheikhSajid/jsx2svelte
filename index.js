@@ -1086,7 +1086,8 @@ function compile(code) {
     LogicalExpression(condPath) {
       // inline conditional expression {condition && <JSXElement />}
       const jsxContainer = condPath.findParent(t.isJSXExpressionContainer);
-      if (jsxContainer) {
+      const jsxOpeningElem = condPath.findParent(t.isJSXOpeningElement);
+      if (jsxContainer && !jsxOpeningElem) {
         const jsx = generate(condPath.get('right').node, { comments: false })
           .code;
 
@@ -1104,7 +1105,9 @@ function compile(code) {
       }
     },
     ConditionalExpression(condPath) {
-      if (condPath.findParent(t.isJSXExpressionContainer)) {
+      const jsxContainer = condPath.findParent(t.isJSXExpressionContainer);
+      const jsxOpeningElem = condPath.findParent(t.isJSXOpeningElement);
+      if (jsxContainer && !jsxOpeningElem) {
         const testCode = generate(condPath.get('test').node, {}).code;
         const consequentCode = generate(condPath.get('consequent').node, {})
           .code;
